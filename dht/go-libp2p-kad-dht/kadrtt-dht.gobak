@@ -1,0 +1,250 @@
+package dht
+
+//import kb "dht/kadrtt/github.com/libp2p/go-libp2p-kbucket"
+import (
+	"context"
+	"fmt"
+	goprocessctx "github.com/jbenet/goprocess/context"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p-kad-dht/providers"
+	"github.com/libp2p/go-libp2p-kad-dht/rtrefresh"
+	kb "github.com/libp2p/go-libp2p-kbucket"
+	"github.com/libp2p/go-libp2p-kbucket/peerdiversity"
+	"math"
+	"time"
+)
+
+
+
+type KadRTT struct{
+	IpfsDHT
+	routingTable *kb.KadRTTRT
+	rtRefreshManager *rtrefresh.KadRTTRtRefreshManager
+
+
+}
+
+func (dht *KadRTT) New(ctx context.Context, h host.Host, options ...Option) (*KadRTT, error) {
+	var cfg config
+	if err := cfg.apply(append([]Option{defaults}, options...)...); err != nil {
+		return nil, err
+	}
+	if err := cfg.applyFallbacks(h); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
+	dht, err := dht.makeDHT(ctx, h, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DHT, err=%s", err)
+	}
+
+	dht.autoRefresh = cfg.routingTable.autoRefresh
+
+	dht.maxRecordAge = cfg.maxRecordAge
+	dht.enableProviders = cfg.enableProviders
+	dht.enableValues = cfg.enableValues
+	dht.disableFixLowPeers = cfg.disableFixLowPeers
+
+	dht.Validator = cfg.validator
+
+	dht.testAddressUpdateProcessing = cfg.testAddressUpdateProcessing
+	//Added by Kanemitsu
+	dht.isKadRTT = cfg.isKadRTT
+
+	dht.auto = cfg.mode
+	switch cfg.mode {
+	case ModeAuto, ModeClient:
+		dht.mode = modeClient
+	case ModeAutoServer, ModeServer:
+		dht.mode = modeServer
+	default:
+		return nil, fmt.Errorf("invalid dht mode %d", cfg.mode)
+	}
+
+	if dht.mode == modeServer {
+		if err := dht.moveToServerMode(); err != nil {
+			return nil, err
+		}
+	}
+
+	// register for event bus and network notifications
+	///sn, err := newSubscriberNotifee_kadrtt(dht)
+	if err != nil {
+		return nil, err
+	}
+	//dht.proc.Go(sn.subscribe)
+	// handle providers
+	dht.proc.AddChild(dht.ProviderManager.Process())
+
+	// go-routine to make sure we ALWAYS have RT peer addresses in the peerstore
+	// since RT membership is decoupled from connectivity
+	go dht.persistRTPeersInPeerStore()
+
+	dht.proc.Go(dht.rtPeerLoop)
+
+	// Fill routing table with currently connected peers that are DHT servers
+	dht.plk.Lock()
+	for _, p := range dht.host.Network().Peers() {
+		dht.peerFound(dht.ctx, p, false)
+	}
+	dht.plk.Unlock()
+
+	dht.proc.Go(dht.populatePeers)
+
+	return dht, nil
+}
+
+
+func (*KadRTT) makeDHT(ctx context.Context, h host.Host, cfg config) (*KadRTT, error) {
+	var protocols, serverProtocols []protocol.ID
+
+	v1proto := cfg.protocolPrefix + kad1
+
+	if cfg.v1ProtocolOverride != "" {
+		v1proto = cfg.v1ProtocolOverride
+	}
+
+	protocols = []protocol.ID{v1proto}
+	serverProtocols = []protocol.ID{v1proto}
+	dht:= new(KadRTT)
+	dht.datastore = cfg.datastore
+	dht.self = h.ID()
+	dht.selfKey = kb.ConvertPeerID(h.ID())
+	dht.peerstore = h.Peerstore()
+	dht.host = h
+	dht.strmap = make(map[peer.ID]*messageSender)
+	dht.birth = time.Now()
+	dht.protocols = protocols
+	dht.protocolsStrs = protocol.ConvertToStrings(protocols)
+	dht.serverProtocols = serverProtocols
+	dht.bucketSize = cfg.bucketSize
+	dht.alpha = cfg.concurrency
+	dht.beta = cfg.resiliency
+	dht.queryPeerFilter = cfg.queryPeerFilter
+	dht.routingTablePeerFilter = cfg.routingTable.peerFilter
+	dht.rtPeerDiversityFilter = cfg.routingTable.diversityFilter
+	dht.fixLowPeersChan = make(chan struct{}, 1)
+	dht.addPeerToRTChan = make(chan addPeerRTReq)
+	dht.refreshFinishedCh = make(chan struct{})
+
+	var maxLastSuccessfulOutboundThreshold time.Duration
+
+	// The threshold is calculated based on the expected amount of time that should pass before we
+	// query a peer as part of our refresh cycle.
+	// To grok the Math Wizardy that produced these exact equations, please be patient as a document explaining it will
+	// be published soon.
+	if cfg.concurrency < cfg.bucketSize { // (alpha < K)
+		l1 := math.Log(float64(1) / float64(cfg.bucketSize))                              //(Log(1/K))
+		l2 := math.Log(float64(1) - (float64(cfg.concurrency) / float64(cfg.bucketSize))) // Log(1 - (alpha / K))
+		maxLastSuccessfulOutboundThreshold = time.Duration(l1 / l2 * float64(cfg.routingTable.refreshInterval))
+	} else {
+		maxLastSuccessfulOutboundThreshold = cfg.routingTable.refreshInterval
+	}
+
+	// construct routing table
+	// use twice the theoritical usefulness threhold to keep older peers around longer
+	rt, err := dht.makeRoutingTable(dht, cfg, 2*maxLastSuccessfulOutboundThreshold)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct routing table,err=%s", err)
+	}
+	dht.routingTable = rt
+	dht.bootstrapPeers = cfg.bootstrapPeers
+
+	// rt refresh manager
+	rtRefresh, err := dht.makeRtRefreshManager(dht, cfg, maxLastSuccessfulOutboundThreshold)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct RT Refresh Manager,err=%s", err)
+	}
+	dht.rtRefreshManager = rtRefresh
+
+	// create a DHT proc with the given context
+	dht.proc = goprocessctx.WithContextAndTeardown(ctx, func() error {
+		return rtRefresh.Close()
+	})
+
+	// create a tagged context derived from the original context
+	ctxTags := dht.newContextWithLocalTags(ctx)
+	// the DHT context should be done when the process is closed
+	dht.ctx = goprocessctx.WithProcessClosing(ctxTags, dht.proc)
+
+	pm, err := providers.NewProviderManager(dht.ctx, h.ID(), cfg.datastore, cfg.providersOptions...)
+	if err != nil {
+		return nil, err
+	}
+	dht.ProviderManager = pm
+
+	dht.rtFreezeTimeout = rtFreezeTimeout
+
+	return dht, nil
+}
+
+func (*KadRTT) makeRoutingTable(dht *KadRTT, cfg config, maxLastSuccessfulOutboundThreshold time.Duration) (*kb.KadRTTRT, error) {
+	// make a Routing Table Diversity Filter
+	var filter *peerdiversity.Filter
+	if dht.rtPeerDiversityFilter != nil {
+		df, err := peerdiversity.NewFilter(dht.rtPeerDiversityFilter, "rt/diversity", func(p peer.ID) int {
+			return kb.CommonPrefixLen(dht.selfKey, kb.ConvertPeerID(p))
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct peer diversity filter: %w", err)
+		}
+
+		filter = df
+	}
+
+	//rt, err := kb.NewRoutingTable(cfg.bucketSize, dht.selfKey, time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter)
+	rt, err := kb.NewKadRTTRT(cfg.bucketSize, dht.selfKey, time.Minute, dht.host.Peerstore(), maxLastSuccessfulOutboundThreshold, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	cmgr := dht.host.ConnManager()
+
+	rt.PeerAdded = func(p peer.ID) {
+		commonPrefixLen := kb.CommonPrefixLen(dht.selfKey, kb.ConvertPeerID(p))
+		if commonPrefixLen < protectedBuckets {
+			cmgr.Protect(p, kbucketTag)
+		} else {
+			cmgr.TagPeer(p, kbucketTag, baseConnMgrScore)
+		}
+	}
+	rt.PeerRemoved = func(p peer.ID) {
+		cmgr.Unprotect(p, kbucketTag)
+		cmgr.UntagPeer(p, kbucketTag)
+
+		// try to fix the RT
+		dht.fixRTIfNeeded()
+	}
+
+	return rt, err
+}
+
+func (*KadRTT) makeRtRefreshManager(dht *KadRTT, cfg config, maxLastSuccessfulOutboundThreshold time.Duration) (*rtrefresh.KadRTTRtRefreshManager, error) {
+	keyGenFnc := func(cpl uint) (string, error) {
+		p, err := dht.routingTable.GenRandPeerID(cpl)
+		return string(p), err
+	}
+
+	queryFnc := func(ctx context.Context, key string) error {
+		_, err := dht.GetClosestPeers(ctx, key)
+		return err
+	}
+
+	r, err := rtrefresh.NewKadRTTRtRefreshManager(
+		dht.host, dht.routingTable, cfg.routingTable.autoRefresh,
+		keyGenFnc,
+		queryFnc,
+		cfg.routingTable.refreshQueryTimeout,
+		cfg.routingTable.refreshInterval,
+		maxLastSuccessfulOutboundThreshold,
+		dht.refreshFinishedCh)
+
+	return r, err
+}
