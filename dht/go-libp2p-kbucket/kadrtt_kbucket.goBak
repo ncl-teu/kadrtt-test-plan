@@ -1,0 +1,242 @@
+package kbucket
+
+import (
+	"container/list"
+	"github.com/libp2p/go-libp2p-core/peer"
+)
+
+
+/**
+Author: H. Kanemitsu
+ */
+type KadRTT_bucketInfo struct{
+	/**
+	k-bukcet entry
+	 */
+	bucket
+
+	/**
+	Peer List
+	 */
+	//list *list.List
+
+	/**
+	Degree of lookup concurrency
+	 */
+	alpha int
+
+	/**
+	# of next hops returned from each lookuped peer
+	 */
+	beta int
+
+	/**
+	k-bucket size in this k-bucket index.
+	 */
+	k int
+
+	/**
+	content hit probability per one query
+	 */
+	p_query float64
+
+	/**
+	probability for non-content hit until idx -1
+	 */
+	p_not float64
+}
+
+
+/**
+Constructor for initializing entries in KadRTT_bucketInfo type
+ */
+func NewKadRTT_bucketInfo(a_in int, b_in int, k_in int) *KadRTT_bucketInfo {
+	binfo := new(KadRTT_bucketInfo)
+	binfo.list = list.New()
+	binfo.alpha = a_in
+	binfo.beta = b_in
+	binfo.k = k_in
+	binfo.p_not = 1.0
+
+	/*b := &KadRTT_bucketInfo{
+		//bucket: *newBucket(),
+		alpha: in_a,
+		beta:in_b,
+		k:in_k,
+	}*/
+
+	return binfo
+}
+
+func (rt *KadRTT_bucketInfo) newBucket() *KadRTT_bucketInfo {
+	//b := new(KadRTT_bucketInfo)
+
+	b := NewKadRTT_bucketInfo(-1,-1,-1)
+	b.list = list.New()
+	return b
+}
+
+
+func (b *KadRTT_bucketInfo) setAlpha(v int) {
+	b.alpha = v
+}
+
+func (b *KadRTT_bucketInfo) getAlpha() int{
+	return b.alpha
+}
+
+func (b *KadRTT_bucketInfo) setBeta(v int){
+	b.beta = v
+}
+func (b *KadRTT_bucketInfo) getBeta() int{
+	return b.beta
+}
+
+func (b *KadRTT_bucketInfo) setK(v int){
+	b.k = v
+}
+
+func (b *KadRTT_bucketInfo) getK() int{
+	return b.k
+}
+
+// returns all peers in the bucket
+// it is safe for the caller to modify the returned objects as it is a defensive copy
+func (b *KadRTT_bucketInfo) peers() []PeerInfo {
+
+	return b.peers()
+}
+
+// returns the "minimum" peer in the bucket based on the `lessThan` comparator passed to it.
+// It is NOT safe for the comparator to mutate the given `PeerInfo`
+// as we pass in a pointer to it.
+// It is NOT safe to modify the returned value.
+func (b *KadRTT_bucketInfo) min(lessThan func(p1 *PeerInfo, p2 *PeerInfo) bool) *PeerInfo {
+	if b.list.Len() == 0 {
+		return nil
+	}
+
+	minVal := b.list.Front().Value.(*PeerInfo)
+
+	for e := b.list.Front().Next(); e != nil; e = e.Next() {
+		val := e.Value.(*PeerInfo)
+
+		if lessThan(val, minVal) {
+			minVal = val
+		}
+	}
+
+	return minVal
+
+	/*
+	return b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
+	})
+*/
+}
+
+// updateAllWith updates all the peers in the bucket by applying the given update function.
+func (b *KadRTT_bucketInfo) updateAllWith(updateFnc func(p *PeerInfo)) {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		val := e.Value.(*PeerInfo)
+		updateFnc(val)
+	}
+
+	/*b.updateAllWith(func(p *PeerInfo) {
+		p.replaceable = true
+	})
+*/
+}
+
+// return the Ids of all the peers in the bucket.
+func (b *KadRTT_bucketInfo) peerIds() []peer.ID {
+	ps := make([]peer.ID, 0, b.list.Len())
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		p := e.Value.(*PeerInfo)
+		ps = append(ps, p.Id)
+	}
+	return ps
+
+}
+
+// returns the peer with the given Id if it exists
+// returns nil if the peerId does not exist
+func (b *KadRTT_bucketInfo) getPeer(p peer.ID) *PeerInfo {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		if e.Value.(*PeerInfo).Id == p {
+			return e.Value.(*PeerInfo)
+		}
+	}
+	return nil
+}
+
+// removes the peer with the given Id from the bucket.
+// returns true if successful, false otherwise.
+func (b *KadRTT_bucketInfo) remove(id peer.ID) bool {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		if e.Value.(*PeerInfo).Id == id {
+			b.list.Remove(e)
+			return true
+		}
+	}
+	return false
+}
+
+func (b *KadRTT_bucketInfo) moveToFront(id peer.ID) {
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		if e.Value.(*PeerInfo).Id == id {
+			b.list.MoveToFront(e)
+		}
+	}
+
+}
+
+func (b *KadRTT_bucketInfo) pushFront(p *PeerInfo) {
+	b.list.PushFront(p)
+}
+
+func (b *KadRTT_bucketInfo) len() int {
+	return b.list.Len()
+}
+
+// splits a buckets peers into two buckets, the methods receiver will have
+// peers with CPL equal to cpl, the returned bucket will have peers with CPL
+// greater than cpl (returned bucket has closer peers)
+func (b *KadRTT_bucketInfo) split(cpl int, target ID) *KadRTT_bucketInfo {
+	out := list.New()
+	newbuck := b.newBucket()
+	newbuck.list = out
+	e := b.list.Front()
+	for e != nil {
+		pDhtId := e.Value.(*PeerInfo).dhtId
+		peerCPL := CommonPrefixLen(pDhtId, target)
+		if peerCPL > cpl {
+			cur := e
+			out.PushBack(e.Value)
+			e = e.Next()
+			b.list.Remove(cur)
+			continue
+		}
+		e = e.Next()
+	}
+	return newbuck
+
+}
+
+// maxCommonPrefix returns the maximum common prefix length between any peer in
+// the bucket with the target ID.
+func (b *KadRTT_bucketInfo) maxCommonPrefix(target ID) uint {
+	maxCpl := uint(0)
+	for e := b.list.Front(); e != nil; e = e.Next() {
+		cpl := uint(CommonPrefixLen(e.Value.(*PeerInfo).dhtId, target))
+		if cpl > maxCpl {
+			maxCpl = cpl
+		}
+	}
+	return maxCpl
+
+}
+
+
+
+
