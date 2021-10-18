@@ -11,7 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	"math"
 	"math/big"
-	"scientificgo.org/special"
+
 	"sort"
 	"sync"
 	"time"
@@ -33,6 +33,7 @@ type RoutingTable struct {
 	ctx context.Context
 	// function to cancel the RT context
 	ctxCancel context.CancelFunc
+
 
 	// ID of the local peer
 	local ID
@@ -225,7 +226,7 @@ func (rt *RoutingTable) CalcKOpt(idx int) int{
 	val := (float64)(rt.prob_exchange * rt.arv_rate_store)
 	w2  := math.Log(val)
 	w1 := -1 * math.Pow(2, float64(r)) * math.Pow(math.E, (float64)(-1 * rt.prob_exchange*rt.arv_rate_store))
-	nomi := special.LambertW(0, w1*w2)
+	nomi := rt.LambertW(0, w1*w2)
 	denomi := math.Log((float64)(rt.prob_exchange * rt.arv_rate_store))
 	k_opt := int(math.Max(float64(1),math.Floor(-1*nomi/denomi)))
 	if k_opt < 2 {
@@ -236,6 +237,154 @@ func (rt *RoutingTable) CalcKOpt(idx int) int{
 	return k_opt
 
 }
+
+func (rt *RoutingTable)LambertW(k int, x float64) float64 {
+	// Special cases.
+	switch {
+	case k < -1 || k > 0 || x < -1/math.E || (k == -1 && x > 0) || math.IsNaN(x):
+		return math.NaN()
+	case x == 0:
+		if k == 0 {
+			return 0
+		}
+		return math.Inf(-1)
+	case x == -1/math.E:
+		return -1
+	case math.IsInf(x, 1):
+		return x
+	}
+
+	// Estimate an initial value using approximations and then use
+	// Fritsch iteration (once) to get an improved estimate with O(1e-15) error
+	w := rt.initial(k, x)
+	return rt.fritsch(w, x)
+}
+
+func (rt *RoutingTable)fritsch(w, x float64) float64 {
+	z := math.Log(x/w) - w
+	w1 := w + 1
+	q := 2 * w1 * (w1 + 2*z/3)
+	eps := z / w1 * (q - z) / (q - 2*z)
+	return w * (1 + eps)
+}
+
+func (rt *RoutingTable)initial(k int, x float64) float64 {
+	switch k {
+	case 0:
+		const (
+			xbranch = -0.32358170806015724
+			xratp0  = 0.14546954290661823
+			xratp1  = 8.706658967856612
+		)
+		switch {
+		case x < xbranch:
+			return rt.branchpoint(k, x)
+		case x < xratp0:
+			return rt.rationalp0(x)
+		case x < xratp1:
+			return rt.rationalp1(x)
+		default:
+			return rt.asymptotic(k, x)
+		}
+	default: // k=-1
+		const xbranch = -0.30298541769
+		switch {
+		case x < xbranch:
+			return rt.branchpoint(k, x)
+		default:
+			return rt.rationalm(x)
+		}
+	}
+}
+
+func (rt *RoutingTable)rationalm(x float64) float64 {
+	const (
+		a0 = -7.81417672390744
+		a1 = 253.88810188892484
+		a2 = 657.9493176902304
+
+		b0 = 1
+		b1 = -60.43958713690808
+		b2 = 99.9856708310761
+		b3 = 682.6073999909428
+		b4 = 962.1784396969866
+		b5 = 1477.9341280760887
+	)
+
+	return (a0 + x*(a1+x*a2)) / (b0 + x*(b1+x*(b2+x*(b3+x*(b4+x*b5)))))
+}
+// asymptotic returns an asymptotic estimate of W(x, k)
+func (rt *RoutingTable)asymptotic(k int, x float64) float64 {
+	s := 1 + 2*k
+	a := math.Log(float64(s) * x)
+	b := math.Log(float64(s) * a)
+
+	ba := b / a
+	b2 := b * b
+	b3 := b2 * b
+	b4 := b2 * b2
+
+	q0 := b - 2
+	q1 := 2*b2 - 9*b + 6
+	q2 := 3*b3 - 22*b2 + 36*b - 12
+	q3 := 12*b4 - 125*b3 + 350*b2 - 300*b + 60
+	return a - b + ba*(1+1/(2*a)*(q0+1/(3*a)*(q1+1/(2*a)*(q2+1/(5*a)*q3))))
+}
+func (rt *RoutingTable) rationalp0(x float64) float64 {
+	const (
+		a0 = 1
+		a1 = 5.931375839364438
+		a2 = 11.39220550532913
+		a3 = 7.33888339911111
+		a4 = 0.653449016991959
+
+		b0 = 1
+		b1 = 6.931373689597704
+		b2 = 16.82349461388016
+		b3 = 16.43072324143226
+		b4 = 5.115235195211697
+	)
+	num := a0 + x*(a1+x*(a2+x*(a3+x*a4)))
+	den := b0 + x*(b1+x*(b2+x*(b3+x*b4)))
+	return x * num / den
+}
+
+func (rt *RoutingTable) rationalp1(x float64) float64 {
+	const (
+		a0 = 1
+		a1 = 2.445053070726557
+		a2 = 1.343664225958226
+		a3 = 0.148440055397592
+		a4 = 0.0008047501729130
+
+		b0 = 1
+		b1 = 3.444708986486002
+		b2 = 3.292489857371952
+		b3 = 0.916460018803122
+		b4 = 0.0530686404483322
+	)
+	num := a0 + x*(a1+x*(a2+x*(a3+x*a4)))
+	den := b0 + x*(b1+x*(b2+x*(b3+x*b4)))
+	return x * num / den
+}
+func (rt *RoutingTable)branchpoint(k int, x float64) float64 {
+	s := 1 + 2*k
+	p := float64(s) * math.Sqrt2 * math.Sqrt(1+math.E*x)
+	const (
+		b0 = -1
+		b1 = 1
+		b2 = -0.3333333333333333
+		b3 = 0.1527777777777778
+		b4 = -0.07962962962962963
+		b5 = 0.04450231481481481
+		b6 = -0.02598471487360376
+		b7 = 0.01563563253233392
+		b8 = -0.009616892024299432
+		b9 = 0.006014543252956118
+	)
+	return b0 + p*(b1+p*(b2+p*(b3+p*(b4+p*(b5+p*(b6+p*(b7+p*(b8+p*b9))))))))
+}
+
 
 //Derive optimal alpha
 func (rt *RoutingTable) CalcAlphaOpt(idx int) int{
@@ -270,7 +419,7 @@ func (rt *RoutingTable) CalcAlphaOpt(idx int) int{
 
 	denomi := float64(float64(br.beta) * float64(br.k) * float64(rt.pool_size) * math.Log(p_not))
 
-	w := special.LambertW(0, float64(-1)*(float64(rt.pool_size)*math.Pow(p_not, float64(rt.pool_size) * float64(br.beta)+ (float64(rt.pool_size)*float64(br.beta))/(1- math.Pow(p_not, float64(rt.pool_size)*float64(br.beta))))*float64(br.beta) *math.Log(p_not))/(math.Pow(p_not, float64(rt.pool_size * br.beta) )-1))
+	w := rt.LambertW(0, float64(-1)*(float64(rt.pool_size)*math.Pow(p_not, float64(rt.pool_size) * float64(br.beta)+ (float64(rt.pool_size)*float64(br.beta))/(1- math.Pow(p_not, float64(rt.pool_size)*float64(br.beta))))*float64(br.beta) *math.Log(p_not))/(math.Pow(p_not, float64(rt.pool_size * br.beta) )-1))
 	w2 := (float64(br.beta) * float64(rt.pool_size)* math.Log(p_not))/(1- math.Pow(p_not, float64(br.beta) * float64(rt.pool_size)))
 	alpha_opt := math.Abs(float64(math.Ceil(denomi / float64((w - w2)))))
 
