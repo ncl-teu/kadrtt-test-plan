@@ -296,7 +296,3 @@ gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b h1:h8qDotaEPuJATrMmW04NCwg7v
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.1-2019.2.3/go.mod h1:a3bituU0lyd329TUQxRnasdCoJDkEUEAqEt0JzvZhAg=
-scientificgo.org/special v0.0.0 h1:P6WJkECo6tgtvZAEfNXl+KEB9ReAatjKAeX8U07mjSc=
-scientificgo.org/special v0.0.0/go.mod h1:LoGVh9tS431RLTJo7gFlYDKFWq44cEb7QqL+M0EKtZU=
-scientificgo.org/testutil v0.0.0 h1:y356DHRo0tAz9zIFmxlhZoKDlHPHaWW/DCm9k3PhIMA=
-scientificgo.org/testutil v0.0.0/go.mod h1:Go6R4b+9YkFocMo3H3vNQ7tjbrX9Rc12wal7NZjvPXg=
