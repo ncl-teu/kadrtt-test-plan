@@ -729,8 +729,16 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 			var err error
 			if(dht.isKadRTT){
 				dur := dht.KadRTTPing(dht.ctx, addReq.p)
+				//fmt.Println("***Duration: %d", dur)
+				//dht.Ping(dht.ctx, addReq.p)
+				//dur := dht.routingTable.GetRTT(addReq.p)
+
+				//dur := time.Duration(10000)
+
 				newlyAdded, err = dht.routingTable.TryAddPeerKadRTT(addReq.p, addReq.queryPeer, isBootsrapping, dur)
+
 			}else{
+
 				newlyAdded, err = dht.routingTable.TryAddPeer(addReq.p, addReq.queryPeer, isBootsrapping)
 
 			}
@@ -970,7 +978,7 @@ func (dht *IpfsDHT) Host() host.Host {
 func (dht *IpfsDHT) Ping(ctx context.Context, p peer.ID) error {
 	req := pb.NewMessage(pb.Message_PING, nil, 0)
 	//Added by Kanemitsu
-	start := time.Now()
+	//start := time.Now()
 
 	resp, err := dht.sendRequest(ctx, p, req)
 
@@ -980,40 +988,36 @@ func (dht *IpfsDHT) Ping(ctx context.Context, p peer.ID) error {
 	if resp.Type != pb.Message_PING {
 		return fmt.Errorf("got unexpected response type: %v", resp.Type)
 	}
+
 	//Added by Kanemitsu
-	if(dht.isKadRTT){
+	/*if(dht.isKadRTT){
 		dur := time.Since(start)
 		dht.routingTable.SetRTT(p, dur)
 
-
-
-	}
+	}*/
 
 	return nil
 }
 
 // Ping sends a ping message to the passed peer and waits for a response.
 func (dht *IpfsDHT) KadRTTPing(ctx context.Context, p peer.ID) time.Duration {
-	req := pb.NewMessage(pb.Message_PING, nil, 0)
+	//req := pb.NewMessage(pb.Message_PING, nil, 0)
 	//Added by Kanemitsu
-	start := time.Now()
+	//start := time.Now()
 
-	resp, err := dht.sendRequest(ctx, p, req)
+	//resp, err := dht.sendRequest(ctx, p, req)
+	//dht.handlePing(ctx, p, req)
+	//dht.handlePing()
 
-	if err != nil {
-		return -1
-	}
-	if resp.Type != pb.Message_PING {
-		return -1
-	}
+	//dht.routingTable.metrics.LatencyEWMA(p)
 	//Added by Kanemitsu
 	//if(dht.isKadRTT){
-	dur := time.Since(start)
+	//dur := time.Since(start)
 	//dht.routingTable.SetRTT(p, dur)
 
 //	}
 
-	return dur
+	return -1
 }
 
 

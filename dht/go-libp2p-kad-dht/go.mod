@@ -39,8 +39,10 @@ require (
 	go.uber.org/zap v1.18.1
 )
 
-replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
+//replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
 
 //require github.com/ncl-teu/go-libp2p-kadrtt-kbucket v0.3.0
 //replace github.com/libp2p/go-libp2p-kbucket => github.com/ncl-teu/go-libp2p-kadrtt-kbucket
-//replace github.com/libp2p/go-libp2p-kad-dht => ../go-libp2p-kad-dht
+//replace github.com/libp2p/go-libp2p-kad-dht => /home/kanemih/testground/libp2p-test-plans/dht/go-libp2p-kad-dht
+
+replace github.com/libp2p/go-libp2p-kbucket => /plan/go-libp2p-kbucket

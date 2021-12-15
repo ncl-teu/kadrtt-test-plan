@@ -215,9 +215,16 @@ func (q *query) constructLookupResult(target kb.ID) *lookupWithFollowupResult {
 	// Lookup and starvation are both valid ways for a lookup to complete. (Starvation does not imply failure.)
 	// Lookup termination (as defined in isLookupTermination) is not possible in small networks.
 	// Starvation is a successful query termination in small networks.
-	if !(q.isLookupTermination() || q.isStarvationTermination()) {
-		completed = false
+	if(q.dht.isKadRTT){
+		if !(q.isLookupTerminationKadRTT(target) || q.isStarvationTermination()) {
+			completed = false
+		}
+	}else{
+		if !(q.isLookupTermination() || q.isStarvationTermination()) {
+			completed = false
+		}
 	}
+
 
 	// extract the top K not unreachable peers
 	var peers []peer.ID
@@ -264,14 +271,24 @@ func (q *query) run() {
 
 //Added by Kanemitsu.
 	targetKadID := kb.ConvertKey(q.key)
+
 	//seedPeers := q.dht.routingTable.NearestPeers(targetKadID, q.dht.bucketSize)
-	cpl := kb.CommonPrefixLen(targetKadID, q.dht.selfKey)
+	cpl := kb.CommonPrefixLen( q.dht.selfKey,targetKadID)
 
 	alpha := q.dht.alpha
+	//fmt.Println("Org Alpha: %d", alpha)
 	if(q.dht.isKadRTT){
 		rt := q.dht.RoutingTable()
+		if cpl >= len(rt.GetBuckets()) {
+			cpl = len(rt.GetBuckets()) - 1
+		}
+
+		//cpl_idx := math.Min(float64(len(rt.GetBuckets())-1), float64(cpl))
+
 		b := rt.GetBucket(cpl)
 		alpha = b.GetAlpha()
+		//
+		alpha = int(math.Max(float64(q.dht.alpha), float64(alpha)))
 	}
 //Kanemitsu END
 
@@ -367,6 +384,7 @@ func (q *query) isReadyToTerminate(ctx context.Context, nPeersToQuery int) (bool
 // From the set of all nodes that are not unreachable,
 // if the closest beta nodes are all queried, the lookup can terminate.
 func (q *query) isLookupTermination() bool {
+
 	peers := q.queryPeers.GetClosestNInStates(q.dht.beta, qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
 	for _, p := range peers {
 		if q.queryPeers.GetState(p) != qpeerset.PeerQueried {
@@ -375,6 +393,25 @@ func (q *query) isLookupTermination() bool {
 	}
 	return true
 }
+
+func (q *query) isLookupTerminationKadRTT(targetKadID kb.ID) bool {
+
+	cpl := kb.CommonPrefixLen( q.dht.selfKey,targetKadID)
+	rt := q.dht.RoutingTable()
+	if cpl >= len(rt.GetBuckets()) {
+		cpl = len(rt.GetBuckets()) - 1
+	}
+	b := rt.GetBucket(cpl)
+	peers := q.queryPeers.GetClosestNInStates(b.GetBeta(), qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
+	for _, p := range peers {
+		if q.queryPeers.GetState(p) != qpeerset.PeerQueried {
+			return false
+		}
+	}
+	return true
+}
+
+
 
 func (q *query) isStarvationTermination() bool {
 	return q.queryPeers.NumHeard() == 0 && q.queryPeers.NumWaiting() == 0
