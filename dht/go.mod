@@ -21,18 +21,22 @@ require (
 	github.com/libp2p/go-tcp-transport v0.2.7
 	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/multiformats/go-multiaddr-net v0.2.0
-//	github.com/ncl-teu/go-libp2p-kad-dht v0.0.0-20211019014038-56f72851ad8b // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/testground/sdk-go v0.2.7
 	go.uber.org/zap v1.18.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	//github.com/libp2p/go-libp2p-autonat v0.1.2-0.20200204200147-902af8cb7b6a
 )
 
-replace (
-	github.com/libp2p/go-libp2p-kad-dht v0.11.1 => github.com/ncl-teu/go-libp2p-kad-dht v0.0.0-20211019014038-56f72851ad8b
-	github.com/libp2p/go-libp2p-kbucket v0.4.7 => github.com/ncl-teu/go-libp2p-kbucket v0.0.0-20211019013811-fc4d441fa1e0
-)
-
-//replace github.com/libp2p/go-libp2p-kad-dht => ./go-libp2p-kad-dht
-
+//replace (
+//github.com/libp2p/go-libp2p-kad-dht v0.11.1 => github.com/ncl-teu/go-libp2p-kad-dht v0.0.0-20211011063324-ed0e586ce6f4
+//github.com/libp2p/go-libp2p-kbucket v0.4.7 => github.com/ncl-teu/go-libp2p-kbucket v0.0.0-20211011135728-979a873b3a6e
+//)
 //replace github.com/libp2p/go-libp2p-kbucket => ./go-libp2p-kbucket
+replace github.com/libp2p/go-libp2p-kbucket => /plan/go-libp2p-kbucket
+//replace github.com/libp2p/go-libp2p-kbucket => /home/kanemih/testground/libp2p-test-plans/dht/go-libp2p-kbucket
+//replace github.com/libp2p/go-libp2p-kad-dht => ./go-libp2p-kad-dht
+replace github.com/libp2p/go-libp2p-kad-dht => /plan/go-libp2p-kad-dht
+//replace github.com/libp2p/go-libp2p-kad-dht => /home/kanemih/testground/libp2p-test-plans/dht/go-libp2p-kad-dht
+
+

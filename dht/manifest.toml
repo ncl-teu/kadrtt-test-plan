@@ -9,6 +9,7 @@ enabled = true
 go_version = "1.13"
 module_path = "github.com/libp2p/test-plans/dht"
 exec_pkg = "."
+#skip_runtime_image = true
 
 # TODO: exec:go is not ready yet
 [builders."exec:go"]

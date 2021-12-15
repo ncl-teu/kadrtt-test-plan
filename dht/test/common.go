@@ -35,20 +35,6 @@ import (
 	 */
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	swarm "github.com/libp2p/go-libp2p-swarm"
 	tptu "github.com/libp2p/go-libp2p-transport-upgrader"
 	tcp "github.com/libp2p/go-tcp-transport"
@@ -182,6 +168,7 @@ func NewDHTNode(ctx context.Context, runenv *runtime.RunEnv, opts *SetupOpts, id
 
 	// Generate bogus advertising address
 	tcpAddr, err := getSubnetAddr(runenv.TestSubnet)
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -276,6 +263,8 @@ func getSubnetAddr(subnet *ptypes.IPNet) (*net.TCPAddr, error) {
 	if err != nil {
 		return nil, err
 	}
+	//fmt.Println("***SUBNET %s, /%s", subnet.IPNet)
+
 	for _, addr := range addrs {
 		if ip, ok := addr.(*net.IPNet); ok {
 			if subnet.Contains(ip.IP) {
