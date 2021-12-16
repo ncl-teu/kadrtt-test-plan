@@ -1,6 +1,6 @@
 # kadrtt-test-plan
 ## KadRTT architecture
-- Detailed description can bee seen [here](https://hackmd.io/b-gKq_JmQLOSu1-v7IBRlw)
+- Detailed description can be seen [here](https://hackmd.io/b-gKq_JmQLOSu1-v7IBRlw)
 ## How to install
 - At $TESTGROUND_HOME/pkg/build/docker_go.go, add the following lines: 
 ~~~
