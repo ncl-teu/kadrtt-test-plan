@@ -15,4 +15,4 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Copy the testground executable by `cp testground /usr/local/bin` for Ubuntu. 
 - Pull the test plan by `git clone https://github.com/ncl-teu/kadrtt-test-plan` at $TESTGROUND_HOME. 
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
-- Then run the test-plan by `testground daemon` and `testground run composition -f compositions/kadrtton.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
+- Then run the test-plan by `testground daemon` and `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
