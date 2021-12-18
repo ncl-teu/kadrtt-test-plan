@@ -17,3 +17,4 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Pull the test plan by `git clone https://github.com/ncl-teu/kadrtt-test-plan` at $TESTGROUND_HOME. 
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
 - Then run the test-plan by `testground daemon` and `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
+- If goproxy is not working, type `docker run -d -p80:8081 goproxy/goproxy` and then `testground daemon`. 
