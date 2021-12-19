@@ -18,3 +18,4 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
 - Then run the test-plan by `testground daemon` and `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
 - If goproxy is not working, type `docker run -d -p80:8081 goproxy/goproxy` or `docker system prune -a` and then `testground daemon`. 
+- Or, see [here](https://docs.testground.ai/v/master/runner-library/local-docker/troubleshooting#troubleshooting)
