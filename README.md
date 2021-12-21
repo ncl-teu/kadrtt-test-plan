@@ -18,7 +18,7 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Confirm that memory overcommitment is enabled. Add `sysctl vm.overcommit_memory=1` at /etc/sysctl.conf
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
 - Then run the test-plan by `testground daemon` and in another terminal, type `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
-- Increase ARP cache size by varying kernel parameter as root:
+- Increase ARP cache size for more than 40 or more container instances by varying kernel parameter as root:
 - `# vi /etc/sysctl.conf` 
 ~~~
 vm.overcommit_memory = 1
