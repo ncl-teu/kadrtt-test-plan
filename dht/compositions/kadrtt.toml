@@ -24,7 +24,6 @@ bucket_size = "10"
 group_order = "1"
 latency = "100"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
 
 [[groups]]
@@ -43,7 +42,6 @@ group_order = "4"
 latency = "100"
 record_count = "1"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
 
 [[groups]]
@@ -62,7 +60,6 @@ group_order = "3"
 latency = "100"
 record_count = "1"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
 
 [[groups]]
@@ -81,7 +78,6 @@ group_order = "2"
 latency = "100"
 record_count = "1"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
 
 [[groups]]
@@ -101,7 +97,6 @@ latency = "100"
 n_find_peers = "5"
 search_records = "true"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
 
 [[groups]]
@@ -120,5 +115,4 @@ bucket_size = "10"
 group_order = "0"
 latency = "100"
 timeout_secs = "600"
-iskadrtt = "true"
 kadrtt_interval = "180"
