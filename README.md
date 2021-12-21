@@ -27,6 +27,23 @@ net.ipv4.neigh.default.gc_thresh2 = 4096
 net.ipv4.neigh.default.gc_thresh3 = 8192
 ~~~
 - Then see the current parameter by `syctl -p`. 
+## Enable KadRTT
+- At `dht/go-libpp-kbucket/table.go`, set as: 
+~~~
+	rt.isKadRTT = true
+	//Addec by Kanemitsu START
+	rt.arv_rate_store = 0.01
+	rt.pool_size = rt.bucketsize
+	rt.prob_exchange = 1
+~~~
+- If you disable KadRTT (i.e. kad-dht mode), set 
+~~~
+	rt.isKadRTT = false
+	//Addec by Kanemitsu START
+	rt.arv_rate_store = 0.01
+	rt.pool_size = rt.bucketsize
+	rt.prob_exchange = 1
+~~~
 ## Trouble shooting
 - If goproxy is not working, type `docker run -d -p80:8081 goproxy/goproxy` or `docker system prune -a` and then `testground daemon`. 
 - Or, see [here](https://docs.testground.ai/v/master/runner-library/local-docker/troubleshooting#troubleshooting)
