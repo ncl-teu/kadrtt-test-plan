@@ -17,6 +17,16 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Pull the test plan by `git clone https://github.com/ncl-teu/kadrtt-test-plan` at $TESTGROUND_HOME. 
 - Confirm that memory overcommitment is enabled. Add `sysctl vm.overcommit_memory=1` at /etc/sysctl.conf
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
-- Then run the test-plan by `testground daemon` and `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
+- Then run the test-plan by `testground daemon` and in another terminal, type `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
+- Increase ARP cache size by varying kernel parameter as root:
+- `# vi /etc/sysctl.conf` 
+~~~
+vm.overcommit_memory = 1
+net.ipv4.neigh.default.gc_thresh1 = 2048
+net.ipv4.neigh.default.gc_thresh2 = 4096
+net.ipv4.neigh.default.gc_thresh3 = 8192
+~~~
+- Then see the current parameter by `syctl -p`. 
+## Trouble shooting
 - If goproxy is not working, type `docker run -d -p80:8081 goproxy/goproxy` or `docker system prune -a` and then `testground daemon`. 
 - Or, see [here](https://docs.testground.ai/v/master/runner-library/local-docker/troubleshooting#troubleshooting)
