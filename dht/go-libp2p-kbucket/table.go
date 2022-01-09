@@ -26,14 +26,12 @@ var log = logging.Logger("table")
 var ErrPeerRejectedHighLatency = errors.New("peer rejected; latency too high")
 var ErrPeerRejectedNoCapacity = errors.New("peer rejected; insufficient capacity")
 
-
 // RoutingTable defines the routing table.
 type RoutingTable struct {
 	// the routing table context
 	ctx context.Context
 	// function to cancel the RT context
 	ctxCancel context.CancelFunc
-
 
 	// ID of the local peer
 	local ID
@@ -74,9 +72,8 @@ type RoutingTable struct {
 
 	/**
 	# of STORE(addPeer) requests
-	 */
+	*/
 	num_arrive int64
-
 
 	/**
 	Pool Size
@@ -97,11 +94,10 @@ type RoutingTable struct {
 
 	/**
 	Time interval to obtain RTT
-	 */
+	*/
 	rttInterval time.Duration
 
 	lastExTime time.Time
-
 }
 
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
@@ -123,43 +119,43 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		usefulnessGracePeriod: usefulnessGracePeriod,
 
 		df: df,
-
 	}
 	rt.isKadRTT = true
 	//Addec by Kanemitsu START
-	rt.arv_rate_store = 0.01
+	rt.arv_rate_store = 0.5
 	rt.pool_size = rt.bucketsize
-	rt.prob_exchange = 1
+	rt.prob_exchange = 0.5
 
 	rt.setOptValues(0)
 	//set the initial values for k, alpha, and beta.
-	//rt.buildInitParameters()
+	rt.buildInitParameters()
 	rt.lastExTime = time.Now()
-	rt.num_arrive = 0
-	rt.num_exchange = 0
+	rt.num_arrive = 1
+	rt.num_exchange = 1
 
 	//Addec by Kanemitsu END
 
 	rt.ctx, rt.ctxCancel = context.WithCancel(context.Background())
 
-/*
-	a := []byte{0,0}
-	b := []byte{1,0}
-	cpl := CommonPrefixLen(a,b)
-	//cpl2 := ks.ZeroPrefixLen(u.XOR(a, b))
-	cpl2 := u.XOR(a, b)
+	/*
+		a := []byte{0,0}
+		b := []byte{1,0}
+		cpl := CommonPrefixLen(a,b)
+		//cpl2 := ks.ZeroPrefixLen(u.XOR(a, b))
+		cpl2 := u.XOR(a, b)
 
-	fmt.Printf("XOR:%d / Len:%d", cpl2, cpl)
-*/
+		fmt.Printf("XOR:%d / Len:%d", cpl2, cpl)
+	*/
 	return rt, nil
 }
 
-func (rt *RoutingTable) SetRTT(p peer.ID, rtt time.Duration){
+func (rt *RoutingTable) SetRTT(p peer.ID, rtt time.Duration) {
 	//pに対して，rttをセットする．
 	bucketID := rt.bucketIdForPeer(p)
 	//bucket := rt.buckets[bucketID]
 	bucket := rt.GetBucket(bucketID)
 	peer := bucket.getPeer(p)
+
 	peer.SetRTT(rtt)
 }
 
@@ -172,14 +168,12 @@ func (rt *RoutingTable) GetRTT(p peer.ID) time.Duration {
 	return peer.GetRTT()
 }
 
-
-
 func (rt *RoutingTable) configPool() {
-	maxPoolSize:= 0
+	maxPoolSize := 0
 
-	for i := 0; i< len(rt.buckets); i++{
+	for i := 0; i < len(rt.buckets); i++ {
 		br := rt.buckets[i]
-		if(maxPoolSize <= br.k){
+		if maxPoolSize <= br.k {
 			maxPoolSize = br.k
 		}
 	}
@@ -187,29 +181,24 @@ func (rt *RoutingTable) configPool() {
 	rt.setPoolSize(rt.bucketsize)
 }
 
-
 func (rt *RoutingTable) setOptValues(idx int) *bucket {
 	initB := rt.buckets[idx]
 	k_opt := rt.CalcKOpt(idx)
 
-	k_opt = int(math.Max(float64(k_opt), float64(rt.bucketsize)))
+	//k_opt = int(math.Max(float64(k_opt), float64(rt.bucketsize)))
 
 	initB.SetK(k_opt)
 
-
-
 	b_opt := rt.CalcBetaOpt(idx)
-	if(b_opt < 1){
+	if b_opt < 1 {
 		b_opt = k_opt
 	}
-	b_opt = int(math.Min(float64(k_opt), float64(b_opt) ))
+	b_opt = int(math.Min(float64(k_opt), float64(b_opt)))
 
 	initB.SetBeta(b_opt)
 
-
-
 	a_opt := rt.CalcAlphaOpt(idx)
-	if( a_opt > int(rt.pool_size)){
+	if a_opt > int(rt.pool_size) {
 		a_opt = int(rt.pool_size)
 	}
 	a_opt = int(math.Max(2, float64(a_opt)))
@@ -222,47 +211,47 @@ func (rt *RoutingTable) setOptValues(idx int) *bucket {
 	return initB
 }
 
-func (rt*RoutingTable) GetBuckets() []*bucket {
+func (rt *RoutingTable) GetBuckets() []*bucket {
 	return rt.buckets
 }
 
-
-
-func (rt*RoutingTable) GetBucket(cpl int) *bucket {
+func (rt *RoutingTable) GetBucket(cpl int) *bucket {
 	return rt.buckets[cpl]
 }
 
-func (rt *RoutingTable) setStoreRate(val float64){
+func (rt *RoutingTable) setStoreRate(val float64) {
 	rt.arv_rate_store = val
 }
 
-func (rt*RoutingTable) setProbExchange(val float64){
+func (rt *RoutingTable) setProbExchange(val float64) {
 	rt.prob_exchange = val
 }
 
-func (rt*RoutingTable) setPoolSize(val int){
+func (rt *RoutingTable) setPoolSize(val int) {
 	rt.pool_size = val
 }
 
 //Derive optimal k
-func (rt *RoutingTable) CalcKOpt(idx int) int{
+func (rt *RoutingTable) CalcKOpt(idx int) int {
 	r := idx + 1
 	val := (float64)(rt.prob_exchange * rt.arv_rate_store)
-	w2  := math.Log(val)
-	w1 := -1 * math.Pow(2, float64(r)) * math.Pow(math.E, (float64)(-1 * rt.prob_exchange*rt.arv_rate_store))
+	w2 := math.Log(val)
+	w1 := -1 * math.Pow(2, float64(r)) * math.Pow(math.E, (float64)(-1*rt.prob_exchange*rt.arv_rate_store))
 	nomi := rt.LambertW(0, w1*w2)
 	denomi := math.Log((float64)(rt.prob_exchange * rt.arv_rate_store))
-	k_opt := int(math.Max(float64(1),math.Floor(-1*nomi/denomi)))
+	k_opt := int(math.Max(float64(1), math.Floor(-1*nomi/denomi)))
 	if k_opt < 2 {
 		k_opt = 2
 	}
-
+	if(k_opt < rt.bucketsize){
+		k_opt = rt.bucketsize
+	}
 
 	return k_opt
 
 }
 
-func (rt *RoutingTable)LambertW(k int, x float64) float64 {
+func (rt *RoutingTable) LambertW(k int, x float64) float64 {
 	// Special cases.
 	switch {
 	case k < -1 || k > 0 || x < -1/math.E || (k == -1 && x > 0) || math.IsNaN(x):
@@ -284,7 +273,7 @@ func (rt *RoutingTable)LambertW(k int, x float64) float64 {
 	return rt.fritsch(w, x)
 }
 
-func (rt *RoutingTable)fritsch(w, x float64) float64 {
+func (rt *RoutingTable) fritsch(w, x float64) float64 {
 	z := math.Log(x/w) - w
 	w1 := w + 1
 	q := 2 * w1 * (w1 + 2*z/3)
@@ -292,7 +281,7 @@ func (rt *RoutingTable)fritsch(w, x float64) float64 {
 	return w * (1 + eps)
 }
 
-func (rt *RoutingTable)initial(k int, x float64) float64 {
+func (rt *RoutingTable) initial(k int, x float64) float64 {
 	switch k {
 	case 0:
 		const (
@@ -321,7 +310,7 @@ func (rt *RoutingTable)initial(k int, x float64) float64 {
 	}
 }
 
-func (rt *RoutingTable)rationalm(x float64) float64 {
+func (rt *RoutingTable) rationalm(x float64) float64 {
 	const (
 		a0 = -7.81417672390744
 		a1 = 253.88810188892484
@@ -337,8 +326,9 @@ func (rt *RoutingTable)rationalm(x float64) float64 {
 
 	return (a0 + x*(a1+x*a2)) / (b0 + x*(b1+x*(b2+x*(b3+x*(b4+x*b5)))))
 }
+
 // asymptotic returns an asymptotic estimate of W(x, k)
-func (rt *RoutingTable)asymptotic(k int, x float64) float64 {
+func (rt *RoutingTable) asymptotic(k int, x float64) float64 {
 	s := 1 + 2*k
 	a := math.Log(float64(s) * x)
 	b := math.Log(float64(s) * a)
@@ -391,7 +381,7 @@ func (rt *RoutingTable) rationalp1(x float64) float64 {
 	den := b0 + x*(b1+x*(b2+x*(b3+x*b4)))
 	return x * num / den
 }
-func (rt *RoutingTable)branchpoint(k int, x float64) float64 {
+func (rt *RoutingTable) branchpoint(k int, x float64) float64 {
 	s := 1 + 2*k
 	p := float64(s) * math.Sqrt2 * math.Sqrt(1+math.E*x)
 	const (
@@ -409,9 +399,8 @@ func (rt *RoutingTable)branchpoint(k int, x float64) float64 {
 	return b0 + p*(b1+p*(b2+p*(b3+p*(b4+p*(b5+p*(b6+p*(b7+p*(b8+p*b9))))))))
 }
 
-
 //Derive optimal alpha
-func (rt *RoutingTable) CalcAlphaOpt(idx int) int{
+func (rt *RoutingTable) CalcAlphaOpt(idx int) int {
 
 	//	b0 := rt.buckets[0]
 	//k0 := b0.k
@@ -422,42 +411,44 @@ func (rt *RoutingTable) CalcAlphaOpt(idx int) int{
 	pro = 1.0
 	b_pre := rt.buckets[0]
 	if idx > 0 {
-		b_pre = rt.buckets[idx - 1]
-	}else{
+		b_pre = rt.buckets[idx-1]
+	} else {
 		b_pre = rt.buckets[0]
 	}
 
 	pre_pro := b_pre.p_not
 
-	pro = pre_pro *  float64( float64(1)- float64(1/float64(b_pre.k)))
+	pro = pre_pro * float64(float64(1)-float64(1/float64(b_pre.k)))
 	br.p_not = pro
-	if(idx == 0){
+	if idx == 0 {
 		pre_pro = 1
 		br.p_not = 1
 	}
 	//p_query = b_pre.p_query + pro * 1/float64(br.k)
-	p_query =  pro * 1/float64(br.k)
+	p_query = pro * 1 / float64(br.k)
 	br.p_query = p_query
 
 	//p_query = math.Min(0.99, p_query)
 	p_not := float64(1.0 - p_query)
 
-	br.p_not = pro * float64( float64(1)- float64(1/float64(br.k)))
+	br.p_not = pro * float64(float64(1)-float64(1/float64(br.k)))
 
 	denomi := float64(float64(br.beta) * float64(br.k) * float64(rt.pool_size) * math.Log(p_not))
 
-	w := rt.LambertW(0, float64(-1)*(float64(rt.pool_size)*math.Pow(p_not, float64(rt.pool_size) * float64(br.beta)+ (float64(rt.pool_size)*float64(br.beta))/(1- math.Pow(p_not, float64(rt.pool_size)*float64(br.beta))))*float64(br.beta) *math.Log(p_not))/(math.Pow(p_not, float64(rt.pool_size * br.beta) )-1))
-	w2 := (float64(br.beta) * float64(rt.pool_size)* math.Log(p_not))/(1- math.Pow(p_not, float64(br.beta) * float64(rt.pool_size)))
+	w := rt.LambertW(0, float64(-1)*(float64(rt.pool_size)*math.Pow(p_not, float64(rt.pool_size)*float64(br.beta)+(float64(rt.pool_size)*float64(br.beta))/(1-math.Pow(p_not, float64(rt.pool_size)*float64(br.beta))))*float64(br.beta)*math.Log(p_not))/(math.Pow(p_not, float64(rt.pool_size*br.beta))-1))
+	w2 := (float64(br.beta) * float64(rt.pool_size) * math.Log(p_not)) / (1 - math.Pow(p_not, float64(br.beta)*float64(rt.pool_size)))
 	alpha_opt := math.Abs(float64(math.Ceil(denomi / float64((w - w2)))))
 
-	if (alpha_opt < 2){
+	if alpha_opt < 2 {
 		alpha_opt = 2
 	}
+
+
 	return int(math.Ceil(alpha_opt))
 }
 
 //Derive optimal beta
-func (rt *RoutingTable) CalcBetaOpt(idx int) int{
+func (rt *RoutingTable) CalcBetaOpt(idx int) int {
 	/*br := rt.buckets[idx]
 	alphaR := br.alpha
 	beta_opt := rt.pool_size/alphaR
@@ -468,18 +459,16 @@ func (rt *RoutingTable) CalcBetaOpt(idx int) int{
 	//beta_opt := int(rt.pool_size * b0.k / br.alpha)
 	beta_opt := int(math.Min(float64(br.k), float64(rt.pool_size)))
 
-
 	return beta_opt
 }
 
-
 //set the initial alpha, beta, and k for each k-bucket in KadRTT
-func (rt *RoutingTable) buildInitParameters(){
+func (rt *RoutingTable) buildInitParameters() {
 
-	for i:=0 ; i < 160; i++{
+	for i := 0; i < 160; i++ {
 		rt.nextBucket()
-		idx := len(rt.buckets)-1
-	//	rt.setOptValues(idx)
+		idx := len(rt.buckets) - 1
+		//	rt.setOptValues(idx)
 		b := rt.buckets[idx]
 
 		fmt.Printf("idx:%d / k: %d, alpha:%d, beta: %d , pool: %d\n", i, b.k, b.alpha, b.beta, rt.pool_size)
@@ -514,7 +503,6 @@ func (rt *RoutingTable) NPeersForCpl(cpl uint) int {
 	}
 }
 
-
 // TryAddPeer tries to add a peer to the Routing table.
 // If the peer ALREADY exists in the Routing Table and has been queried before, this call is a no-op.
 // If the peer ALREADY exists in the Routing Table but hasn't been queried before, we set it's LastUsefulAt value to
@@ -542,13 +530,18 @@ func (rt *RoutingTable) TryAddPeer(p peer.ID, queryPeer bool, isReplaceable bool
 	return rt.addPeer(p, queryPeer, isReplaceable)
 }
 
+func (rt *RoutingTable) TryAddPeer2(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
+	rt.tabLock.Lock()
+	defer rt.tabLock.Unlock()
+
+	return rt.addPeer2(p, queryPeer, isReplaceable,rtt)
+}
+
 func (rt *RoutingTable) TryAddPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
-		return rt.addPeerKadRTT(p, queryPeer, isReplaceable, rtt)
-
-
+	return rt.addPeerKadRTT(p, queryPeer, isReplaceable, rtt)
 
 }
 
@@ -561,118 +554,189 @@ func Distance(k1, k2 []byte) *big.Int {
 	return dist
 }
 
-
 //Added by Kanemitsu
-func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) *big.Int{
+func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) *big.Int {
 	//Sort by increasing order of key
 	var bp ByPeer = b.peers()
 	//peers := ks.ByPeer(bp)
 	len := len(b.peers())
+
 	//tmpb := b
 	sort.Sort(bp)
 	//var total *big.Int
 	var total = big.NewInt(0)
 	rttList := list.New()
 
-	for i:=0;i<len;i++ {
+	for i := 0; i < len; i++ {
 		//If the exising entry's RTT > new Entry's RTT,
 		//the existing one is put into the list
-		if(bp[i].rtt >= rtt ){
+		if i == len-1 {
+			break
+		}
+		//fmt.Println("#### 561/ ExsitingRTT:", bp[i].rtt.Nanoseconds(), " /NewRTT:", rtt.Nanoseconds())
+		if bp[i].GetRTT() == 0 {
+			//RTTの更新
+			existingRTT := rt.metrics.LatencyEWMA(bp[i].Id)
+			bp[i].SetRTT(existingRTT)
+		}
+		if bp[i].GetRTT().Milliseconds() > rtt.Milliseconds() {
 			rttList.PushFront(bp[i])
+			//fmt.Println("###564: RTT Reverse###")
 		}
-		if(i == len-1){
-			break;
-		}
+
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		//var dist2 = big.NewFloat(0)
+		//dist2.
+		//dist2 = dist2.Div(dist, big.NewInt(36893488147419103232 ))
+		//fmt.Println("dist:", dist)
 		total.Add(total, dist)
 
 	}
-
+	//fmt.Println("### 574: rttLlistLen:", rttList.Len())
 
 	var vTotal = big.NewInt(0)
 	//var variance *big.Int
+
+
+//	start1 := time.Now()
 	avg := total.Div(total, big.NewInt(int64(len)))
-	for i:=0;i<len-1;i++ {
+	//end1 := time.Since(start1)
+	//fmt.Println("###Time1:", end1.Microseconds())
+	//Derive the current ID variance
+	for i := 0; i < len-1; i++ {
 		//Calc ID Distance for two entries
 		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
 		//total.Add(total, dist)
-		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
-		sub := total.Abs(total.Sub(dist, avg))
-		m := sub.Mul(sub, sub)
-		vTotal.Add(vTotal, m)
-	}
+		//start2 := time.Now()
 
+		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		//dist = dist.Div(dist, big.NewInt(36893488147419103232 ))
+		//end2 := time.Since(start2)
+		//fmt.Println("###Time2:", end2.Microseconds())
+
+		//start3 := time.Now()
+
+		sub := total.Abs(total.Sub(dist, avg))
+		//end3 := time.Since(start3)
+		//fmt.Println("###Time3:", end3.Microseconds())
+		////start4 := time.Now()
+
+		//m := sub.Mul(sub, sub)
+		m := sub.Add(sub, sub)
+		//end4 := time.Since(start4)
+	//	fmt.Println("###Time4:", end4.Microseconds())
+	//	start5 := time.Now()
+
+		vTotal.Add(vTotal, m)
+		//end5 := time.Since(start5)
+		//fmt.Println("###Time5:", end5.Microseconds())
+	}
 
 	retP := p
 	retP.Size()
 
-
 	//_ = rttList.Front().Value.(*PeerInfo).Id
-	tmpB := newBucket()
-	copy(tmpB.peers(), b.peers())
+	//tmpB := newBucket()
+	//copy(tmpB.peers(), b.peers())
 
-	for e := rttList.Front(); e!= nil; e = e.Next() {
+	var isExchanged bool
+	isExchanged = false
+	for e := rttList.Front(); e != nil; e = e.Next() {
 		oldP := e.Value.(PeerInfo).Id
 		//Calc ID Variance for each peer RTT > new Peer RTT
-		newV := rt.getIDVariance( b, oldP, p, rtt)
-		if(newV.Cmp(vTotal) < 0){
+		//swap oldP and p for deriting the new variance.
+		newV := rt.getIDVariance(b, oldP, p, rtt)
+
+		if newV.Cmp(vTotal) <= 0 {
 			vTotal = newV
 			retP = oldP
+			isExchanged = true
+		}
+	}
+/*
+	//If the actual ID is set to retP,
+	//the bucket should be updated.
+	replaceablePeer := b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
+	})
+
+	if replaceablePeer != nil && replaceablePeer.replaceable {
+		// let's evict it and add the new peer
+		if rt.removePeer(replaceablePeer.Id) {
+			b.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  time.Now(),
+				LastSuccessfulOutboundQueryAt: time.Now(),
+				AddedAt:                       time.Now(),
+				dhtId:                         ConvertPeerID(p),
+				replaceable:                   true,
+			})
+			rt.PeerAdded(p)
+			//return true, nil
 		}
 	}
 
-	//If the actual ID is set to retP,
-	//the bucket should be updated.
-	if(retP != p ) {
-		b.remove(retP)
-		//Then, the new one is added.
-		b.pushFront(&PeerInfo{
-			Id:                            p,
-			LastUsefulAt:                  time.Now(),
-			LastSuccessfulOutboundQueryAt: time.Now(),
-			AddedAt:                       time.Now(),
-			dhtId:                         ConvertPeerID(p),
-			replaceable:                   true,
-			rtt:                           rtt,
-		})
+ */
+	if isExchanged {
+		if peer := b.getPeer(retP); peer != nil {
+			if(peer.replaceable){
+				if(rt.removePeer(retP)){
+					b.pushFront(&PeerInfo{
+						Id:                            p,
+						LastUsefulAt:                  time.Now(),
+						LastSuccessfulOutboundQueryAt: time.Now(),
+						AddedAt:                       time.Now(),
+						dhtId:                         ConvertPeerID(p),
+						replaceable:                   true,
+						rtt:                           rtt,
+					})
+					//tmpB.pushFront(info2)
 
-		tmpB.pushFront(&PeerInfo{
-			Id:                            p,
-			LastUsefulAt:                  time.Now(),
-			LastSuccessfulOutboundQueryAt: time.Now(),
-			AddedAt:                       time.Now(),
-			dhtId:                         ConvertPeerID(p),
-			replaceable:                   true,
-			rtt:                           rtt,
-		})
-		rt.prob_exchange++
-		rt.PeerAdded(p)
+					fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
+					rt.prob_exchange++
+					rt.PeerAdded(p)
+				}
+			}
+		}
 
-
-	}else{
+	} else {
 
 	}
-	b.idVariance = vTotal
+
+
+	//b.idVariance = vTotal
 
 	return vTotal
 
 }
 
-func remove(slice []PeerInfo, s int) []PeerInfo {
+func (rt *RoutingTable)remove(slice []PeerInfo, s int) []PeerInfo {
 	return append(slice[:s], slice[s+1:]...)
 }
 
+func (rt *RoutingTable)removePeerInfo(slice []PeerInfo, search peer.ID) []PeerInfo {
+	result := []PeerInfo{}
+	for _, v := range slice {
+		if v.Id != search {
+			result = append(result, v)
+		}
+	}
+	return result
+}
 
 //Added by Kanemitsu
 func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt time.Duration) *big.Int {
 	var total = big.NewInt(0)
 	//tmpB := b
-	tmpB := newBucket()
-	copy(tmpB.peers(), b.peers())
+	//tmpB := newBucket()
+	//tmpB := b
+	tmpB := make([]PeerInfo, b.len())
 
-	tmpB.remove(oldP)
-	tmpB.pushFront(&PeerInfo{
+	copy(tmpB, b.peers())
+	tmpB = rt.removePeerInfo(tmpB, oldP)
+
+	tmpB = append(tmpB, PeerInfo{
 		Id:                            newP,
 		LastUsefulAt:                  time.Now(),
 		LastSuccessfulOutboundQueryAt: time.Now(),
@@ -682,20 +746,20 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 		rtt:                           rtt,
 	})
 
-	len := len(tmpB.peers())
 
-	var bp ByPeer = tmpB.peers()
+	len := len(tmpB)
+
+	var bp ByPeer = tmpB
 	//peers := ks.ByPeer(bp)
 
 	sort.Sort(bp)
 	//var total *big.Int
 
-
-	for i:=0;i<len;i++ {
+	for i := 0; i < len; i++ {
 		//If the exising entry's RTT > new Entry's RTT,
 		//the existing one is put into the list
-		if(i == len-1){
-			break;
+		if i == len-1 {
+			break
 		}
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
@@ -707,43 +771,50 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 	var vTotal = big.NewInt(0)
 	//var variance *big.Int
 	avg := total.Div(total, big.NewInt(int64(len)))
-	for i:=0;i<len-1;i++ {
+	for i := 0; i < len; i++ {
 		//Calc ID Distance for two entries
 		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
 		//total.Add(total, dist)
+		if i == len-1 {
+			break
+		}
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
 		sub := total.Abs(total.Sub(dist, avg))
-		m := sub.Mul(sub, sub)
+		//m := sub.Mul(sub, sub)
+		m := sub.Add(sub,sub)
 		vTotal.Add(vTotal, m)
 	}
 
-
 	return vTotal
 }
-
 
 //Added by Kanemitsu
 func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 	var total = big.NewInt(0)
 	//tmpB := b
-	tmpB := newBucket()
+/*	tmpB := newBucket()
 	copy(tmpB.peers(), b)
 	tmpB.remove(id)
+*/
+	tmpB := make([]PeerInfo, len(b))
 
-	len := len(tmpB.peers())
+	copy(tmpB, b)
+	tmpB = rt.removePeerInfo(tmpB, id)
 
-	var bp ByPeer = tmpB.peers()
+
+	len := len(tmpB)
+
+	var bp ByPeer = tmpB
 	//peers := ks.ByPeer(bp)
 
 	sort.Sort(bp)
 	//var total *big.Int
 
-
-	for i:=0;i<len;i++ {
+	for i := 0; i < len; i++ {
 		//If the exising entry's RTT > new Entry's RTT,
 		//the existing one is put into the list
-		if(i == len-1){
-			break;
+		if i == len-1 {
+			break
 		}
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
@@ -754,16 +825,19 @@ func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 	var vTotal = big.NewInt(0)
 	//var variance *big.Int
 	avg := total.Div(total, big.NewInt(int64(len)))
-	for i:=0;i<len-1;i++ {
+	for i := 0; i < len; i++ {
 		//Calc ID Distance for two entries
 		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
 		//total.Add(total, dist)
+		if i == len-1 {
+			break
+		}
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
 		sub := total.Abs(total.Sub(dist, avg))
-		m := sub.Mul(sub, sub)
+		//m := sub.Mul(sub, sub)
+		m := sub.Add(sub,sub)
 		vTotal.Add(vTotal, m)
 	}
-
 
 	return vTotal
 }
@@ -771,9 +845,8 @@ func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
 	bucket := rt.buckets[bucketID]
-	rtt = rt.metrics.LatencyEWMA(p)
-
-
+	//rtt = rt.metrics.LatencyEWMA(p)
+	//fmt.Print("****RTT:", rtt)
 	now := time.Now()
 	var lastUsefulAt time.Time
 	if queryPeer {
@@ -784,24 +857,30 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 	//At first, increment the # of arrivals.
 	rt.num_arrive++
 	span := time.Since(rt.lastExTime)
+	//fmt.Print("######## 814")
+	fmt.Print("^^^^^^^^^^^^^^^^^alpha:", bucket.GetAlpha(), "/ beta:", bucket.GetBeta(),"/ K:", bucket.GetK())
+
 	if span.Seconds() >= rt.rttInterval.Seconds() {
 
 		//old_alpha := bucket.alpha
 		//old_beta := bucket.beta
 		//old_k := bucket.k
+		//fmt.Print("######## 820")
+
 		rt.arv_rate_store = float64(float64(rt.num_arrive) / float64(span))
 		rt.prob_exchange = float64(float64(rt.num_exchange) / float64(rt.num_arrive))
+		//fmt.Print("######## 824")
 
 		//Update optimal values for alpha, beta, k for the specific k-bucket index.
 		bucket = rt.setOptValues(bucketID)
+		//fmt.Print("######## 828")
 
 		//bucket = rt.GetBucket(bucketID)
-		if(bucket.len() < bucket.k){
+		if bucket.len() < bucket.k {
 			rt.prob_exchange = 1
 		}
 
-
-		if( bucket.len() > bucket.k){
+		if bucket.len() > bucket.k {
 			//if the number of bucket entries is reduced, we must
 			//select members to be discarded.
 			//select the by which the ID variance is large.
@@ -810,46 +889,45 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			var bp ByPeer = bucket.peers()
 			//peers := ks.ByPeer(bp)
 			peer_num := len(bucket.peers())
+			//fmt.Print("######## 844")
 
 			//tmpb := b
 			//IDの小さい順にソートする．
 			sort.Sort(bp)
 			retList := list.New()
+			//fmt.Print("######## 850")
 
-			for i:=0;i<peer_num;i++ {
-				//bp[i]をとった場合のID分散値を求める．
-				//オブジェクトを定義して，それにID分散値をもたせる．
-				//そのオブジェクトのリストを作り，さらにID分散値
-				//の降順にソートする．
-				//そのあと，numの数だけ取り出して，bucketからremoveする．
+			for i := 0; i < peer_num; i++ {
+				//Derive ID variance when bp[i] is evicted.
 				variance := rt.getIDVarianceWithOut(bp, bp[i].Id)
 				retList.PushFront(&VarianceInfo{
-					id:  	bp[i].Id,
-					variance:	variance,
+					id:       bp[i].Id,
+					variance: variance,
 				})
 			}
 			//fmt.Println("#### Before:%d", len(bucket.peers()))
 			//Remove $num peers from the k-bucket.
-			for i:=0;i<num;i++ {
+			for i := 0; i < num; i++ {
 				targetID := retList.Front()
 				bucket.remove(targetID.Value.(VarianceInfo).id)
 				retList.Remove(targetID)
 			}
 			//fmt.Println("#### After:%d", len(bucket.peers()))
+			//fmt.Print("######## 866")
 
-
-		}else{
+		} else {
 			//If the number is expanded, no need for reducing the entries in
 			// the bucket.
+			//fmt.Print("######## 870")
+
 		}
 		//Reset the values of exchange probability for the next calculation
 		rt.lastExTime = time.Now()
 		rt.num_arrive = 0
 		rt.num_exchange = 0
 
-
 	}
-
+	//fmt.Print("######## 882")
 
 	// peer already exists in the Routing Table.
 	if peer := bucket.getPeer(p); peer != nil {
@@ -858,6 +936,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		if peer.LastUsefulAt.IsZero() && queryPeer {
 			peer.LastUsefulAt = lastUsefulAt
 		}
+		//fmt.Print("######## 891")
+
 		return false, nil
 	}
 
@@ -867,6 +947,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 	// peer's latency threshold is NOT acceptable
 	if rt.metrics.LatencyEWMA(p) > rt.maxLatency {
 		// Connection doesnt meet requirements, skip!
+		//fmt.Print("######## 902")
+
 		return false, ErrPeerRejectedHighLatency
 	}
 	//以降は，ローカルにpが無い状況．
@@ -875,18 +957,21 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 	// if we aren't able to find a place for the peer in the table,
 	// we will simply remove it from the Filter later.
 	if rt.df != nil {
+		//fmt.Print("######## 912")
+
 		if !rt.df.TryAdd(p) {
 			return false, errors.New("peer rejected by the diversity filter")
 		}
 	}
 	bsize := rt.bucketsize
-	if(rt.isKadRTT){
+	if rt.isKadRTT {
 		bsize = bucket.k
 	}
 
-
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < bsize {
+		//fmt.Print("######## 925")
+
 		bucket.pushFront(&PeerInfo{
 			Id:                            p,
 			LastUsefulAt:                  lastUsefulAt,
@@ -897,25 +982,30 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			rtt:                           rtt,
 		})
 		rt.PeerAdded(p)
-
+		//fmt.Print("######## 937")
 
 		return true, nil
 	}
 
-
 	//in case of k-bucket is full
 	if bucketID == len(rt.buckets)-1 {
+		//fmt.Print("######## 944")
+
 		// if the bucket is too large and this is the last bucket (i.e. wildcard), unfold it.
 		rt.nextBucket()
 		// the structure of the table has changed, so let's recheck if the peer now has a dedicated bucket.
 		bucketID = rt.bucketIdForPeer(p)
 		bucket = rt.buckets[bucketID]
 		blen := rt.bucketsize
-		if(rt.isKadRTT){
+		if rt.isKadRTT {
 			blen = bucket.k
 		}
+		//fmt.Print("######## 955")
+
 		// push the peer only if the bucket isn't overflowing after slitting
-		if bucket.len() < blen/*rt.bucketsize*/ {
+		if bucket.len() < blen /*rt.bucketsize*/ {
+			//fmt.Print("######## 959")
+
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
 				LastUsefulAt:                  lastUsefulAt,
@@ -925,6 +1015,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 				replaceable:                   isReplaceable,
 				rtt:                           rtt,
 			})
+			//fmt.Print("######## 970")
+
 			rt.PeerAdded(p)
 			return true, nil
 		}
@@ -938,52 +1030,66 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		//If the ID variance is made lower, the exchange is accepted.
 		//To do that, the current ID variance is calculated when addPeer is called.
 		//IDVariance := rt.calcIDVariance(bucket, bucketID, p, rtt)
-		if ( bucket.len() == 1){
-			info := bucket.list.Front().Value.(*PeerInfo)
-			//fmt.Println("*****firstRTT: %d, NextRTT, %d", info.rtt, rtt)
+		//fmt.Print("######## 985")
 
-			if (info.rtt >= rtt){
+		if bucket.len() == 0 {
+			//fmt.Print("######## 988")
+
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+				replaceable:                   true,
+				rtt:                           rtt,
+			})
+
+			rt.PeerAdded(p)
+			//fmt.Print("######## 1001")
+
+			rt.num_exchange++
+		}else if bucket.len() == 1 {
+			//fmt.Print("######## 1005")
+
+			info := bucket.list.Front().Value.(*PeerInfo)
+			//fmt.Print("######## 1006")
+
+			fmt.Println("*****firstRTT: %d, NextRTT, %d", info.GetRTT(), rtt)
+
+			if info.GetRTT() > rtt {
+				//fmt.Print("######## 1013")
+
 				//swap
-				rt.removePeer(info.Id)
-				bucket.pushFront(&PeerInfo{
-					Id:                            p,
-					LastUsefulAt:                  lastUsefulAt,
-					LastSuccessfulOutboundQueryAt: now,
-					AddedAt:                       now,
-					dhtId:                         ConvertPeerID(p),
-					replaceable:                   isReplaceable,
-					rtt:                           rtt,
-				})
-				rt.PeerAdded(p)
-				rt.num_exchange++
+				if(info.replaceable) {
+					if (rt.removePeer(info.Id)) {
+						bucket.pushFront(&PeerInfo{
+							Id:                            p,
+							LastUsefulAt:                  lastUsefulAt,
+							LastSuccessfulOutboundQueryAt: now,
+							AddedAt:                       now,
+							dhtId:                         ConvertPeerID(p),
+							replaceable:                   true,
+							rtt:                           rtt,
+						})
+						rt.PeerAdded(p)
+						//fmt.Print("######## 1027")
+					}
+					rt.num_exchange++
+				}
+
 				//return true, nil
 			}
 
-		}else{
+		} else {
+			fmt.Println("############ IDVariance #############")
+			start := time.Now()
 			rt.calcIDVariance(bucket, p, rtt)
+			dur := time.Since(start)
+			fmt.Println("############Elapsed: ", dur.Milliseconds(), "(ms)")
 		}
-		//Added by Kanemitsu
-	/*	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
-			return p1.replaceable
-		})
 
-		if replaceablePeer != nil && replaceablePeer.replaceable {
-			// let's evict it and add the new peer
-			if rt.removePeer(replaceablePeer.Id) {
-				bucket.pushFront(&PeerInfo{
-					Id:                            p,
-					LastUsefulAt:                  lastUsefulAt,
-					LastSuccessfulOutboundQueryAt: now,
-					AddedAt:                       now,
-					dhtId:                         ConvertPeerID(p),
-					replaceable:                   isReplaceable,
-				})
-				rt.PeerAdded(p)
-				return true, nil
-			}
-		}
-*/
-	}else{
+	} else {
 		// the bucket to which the peer belongs is full. Let's try to find a peer
 		// in that bucket which is replaceable.
 		// we don't really need a stable sort here as it dosen't matter which peer we evict
@@ -1009,13 +1115,13 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		}
 	}
 
-
 	// we weren't able to find place for the peer, remove it from the filter state.
 	if rt.df != nil {
 		rt.df.Remove(p)
 	}
 	return false, ErrPeerRejectedNoCapacity
 }
+
 // locking is the responsibility of the caller
 func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
@@ -1026,7 +1132,6 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	if queryPeer {
 		lastUsefulAt = now
 	}
-
 
 	// peer already exists in the Routing Table.
 	if peer := bucket.getPeer(p); peer != nil {
@@ -1043,7 +1148,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 		// Connection doesnt meet requirements, skip!
 		return false, ErrPeerRejectedHighLatency
 	}
-//以降は，ローカルにpが無い状況．
+	//以降は，ローカルにpが無い状況．
 
 	// add it to the diversity filter for now.
 	// if we aren't able to find a place for the peer in the table,
@@ -1054,26 +1159,23 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 		}
 	}
 	bsize := rt.bucketsize
-	if(rt.isKadRTT){
-		bsize = bucket.k
+	if rt.isKadRTT {
+		//bsize = bucket.k
 	}
-
 
 	//まずはpingを行って遅延を計測する．
 
-
 	// We have enough space in the bucket (whether spawned or grouped).
 	if bucket.len() < bsize {
-			bucket.pushFront(&PeerInfo{
-				Id:                            p,
-				LastUsefulAt:                  lastUsefulAt,
-				LastSuccessfulOutboundQueryAt: now,
-				AddedAt:                       now,
-				dhtId:                         ConvertPeerID(p),
-				replaceable:                   isReplaceable,
-			})
-			rt.PeerAdded(p)
-
+		bucket.pushFront(&PeerInfo{
+			Id:                            p,
+			LastUsefulAt:                  lastUsefulAt,
+			LastSuccessfulOutboundQueryAt: now,
+			AddedAt:                       now,
+			dhtId:                         ConvertPeerID(p),
+			replaceable:                   isReplaceable,
+		})
+		rt.PeerAdded(p)
 
 		return true, nil
 	}
@@ -1086,11 +1188,11 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 		bucketID = rt.bucketIdForPeer(p)
 		bucket = rt.buckets[bucketID]
 		blen := rt.bucketsize
-		if(rt.isKadRTT){
-			blen = bucket.k
+		if rt.isKadRTT {
+			//blen = bucket.k
 		}
 		// push the peer only if the bucket isn't overflowing after slitting
-		if bucket.len() < blen/*rt.bucketsize*/ {
+		if bucket.len() < blen /*rt.bucketsize*/ {
 			bucket.pushFront(&PeerInfo{
 				Id:                            p,
 				LastUsefulAt:                  lastUsefulAt,
@@ -1104,38 +1206,162 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 		}
 	}
 
+	//if rt.isKadRTT {
+	//以降は，フルのとき．
+	//もし新規ピアpを入れることで，ID距離の分散が小さくなるのであれば交換する．
+	//そのために，現状の分散値を取得する．
+
+	//}else{
+	// the bucket to which the peer belongs is full. Let's try to find a peer
+	// in that bucket which is replaceable.
+	// we don't really need a stable sort here as it dosen't matter which peer we evict
+	// as long as it's a replaceable peer.
+	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
+	})
+
+	if replaceablePeer != nil && replaceablePeer.replaceable {
+		// let's evict it and add the new peer
+		if rt.removePeer(replaceablePeer.Id) {
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+				replaceable:                   isReplaceable,
+			})
+			rt.PeerAdded(p)
+			return true, nil
+		}
+	}
+	//}
+
+	// we weren't able to find place for the peer, remove it from the filter state.
+	if rt.df != nil {
+		rt.df.Remove(p)
+	}
+	return false, ErrPeerRejectedNoCapacity
+}
+
+
+// locking is the responsibility of the caller
+func (rt *RoutingTable) addPeer2(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
+	bucketID := rt.bucketIdForPeer(p)
+	bucket := rt.buckets[bucketID]
+
+	now := time.Now()
+	var lastUsefulAt time.Time
+	if queryPeer {
+		lastUsefulAt = now
+	}
+
+	// peer already exists in the Routing Table.
+	if peer := bucket.getPeer(p); peer != nil {
+		// if we're querying the peer first time after adding it, let's give it a
+		// usefulness bump. This will ONLY happen once.
+		if peer.LastUsefulAt.IsZero() && queryPeer {
+			peer.LastUsefulAt = lastUsefulAt
+		}
+		return false, nil
+	}
+	//fmt.Println("****Latency: %d / Max: %d", rt.metrics.LatencyEWMA(p),rt.maxLatency )
+	// peer's latency threshold is NOT acceptable
+	if rt.metrics.LatencyEWMA(p) > rt.maxLatency {
+		// Connection doesnt meet requirements, skip!
+		return false, ErrPeerRejectedHighLatency
+	}
+	//以降は，ローカルにpが無い状況．
+
+	// add it to the diversity filter for now.
+	// if we aren't able to find a place for the peer in the table,
+	// we will simply remove it from the Filter later.
+	if rt.df != nil {
+		if !rt.df.TryAdd(p) {
+			return false, errors.New("peer rejected by the diversity filter")
+		}
+	}
+	bsize := rt.bucketsize
 	if rt.isKadRTT {
-		//以降は，フルのとき．
-		//もし新規ピアpを入れることで，ID距離の分散が小さくなるのであれば交換する．
-		//そのために，現状の分散値を取得する．
+		//bsize = bucket.k
+	}
 
+	//まずはpingを行って遅延を計測する．
 
-	}else{
-		// the bucket to which the peer belongs is full. Let's try to find a peer
-		// in that bucket which is replaceable.
-		// we don't really need a stable sort here as it dosen't matter which peer we evict
-		// as long as it's a replaceable peer.
-		replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
-			return p1.replaceable
+	// We have enough space in the bucket (whether spawned or grouped).
+	if bucket.len() < bsize {
+		bucket.pushFront(&PeerInfo{
+			Id:                            p,
+			LastUsefulAt:                  lastUsefulAt,
+			LastSuccessfulOutboundQueryAt: now,
+			AddedAt:                       now,
+			dhtId:                         ConvertPeerID(p),
+			replaceable:                   isReplaceable,
+			rtt: 						rtt,
 		})
+		rt.PeerAdded(p)
 
-		if replaceablePeer != nil && replaceablePeer.replaceable {
-			// let's evict it and add the new peer
-			if rt.removePeer(replaceablePeer.Id) {
-				bucket.pushFront(&PeerInfo{
-					Id:                            p,
-					LastUsefulAt:                  lastUsefulAt,
-					LastSuccessfulOutboundQueryAt: now,
-					AddedAt:                       now,
-					dhtId:                         ConvertPeerID(p),
-					replaceable:                   isReplaceable,
-				})
-				rt.PeerAdded(p)
-				return true, nil
-			}
+		return true, nil
+	}
+
+	//Bucketがフルの場合
+	if bucketID == len(rt.buckets)-1 {
+		// if the bucket is too large and this is the last bucket (i.e. wildcard), unfold it.
+		rt.nextBucket()
+		// the structure of the table has changed, so let's recheck if the peer now has a dedicated bucket.
+		bucketID = rt.bucketIdForPeer(p)
+		bucket = rt.buckets[bucketID]
+		blen := rt.bucketsize
+		if rt.isKadRTT {
+			//blen = bucket.k
+		}
+		// push the peer only if the bucket isn't overflowing after slitting
+		if bucket.len() < blen /*rt.bucketsize*/ {
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+				replaceable:                   isReplaceable,
+				rtt:							rtt,
+			})
+			rt.PeerAdded(p)
+			return true, nil
 		}
 	}
 
+	//if rt.isKadRTT {
+	//以降は，フルのとき．
+	//もし新規ピアpを入れることで，ID距離の分散が小さくなるのであれば交換する．
+	//そのために，現状の分散値を取得する．
+
+	//}else{
+	// the bucket to which the peer belongs is full. Let's try to find a peer
+	// in that bucket which is replaceable.
+	// we don't really need a stable sort here as it dosen't matter which peer we evict
+	// as long as it's a replaceable peer.
+	replaceablePeer := bucket.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+		return p1.replaceable
+	})
+
+	if replaceablePeer != nil && replaceablePeer.replaceable {
+		// let's evict it and add the new peer
+		if rt.removePeer(replaceablePeer.Id) {
+			bucket.pushFront(&PeerInfo{
+				Id:                            p,
+				LastUsefulAt:                  lastUsefulAt,
+				LastSuccessfulOutboundQueryAt: now,
+				AddedAt:                       now,
+				dhtId:                         ConvertPeerID(p),
+				replaceable:                   isReplaceable,
+				rtt:							rtt,
+			})
+			rt.PeerAdded(p)
+			return true, nil
+		}
+	}
+	//}
 
 	// we weren't able to find place for the peer, remove it from the filter state.
 	if rt.df != nil {
@@ -1260,7 +1486,7 @@ func (rt *RoutingTable) nextBucket() {
 	bsize := rt.bucketsize
 	if rt.isKadRTT {
 		bsize = newBucket.k
-		idx := len(rt.buckets)-1
+		idx := len(rt.buckets) - 1
 		rt.setOptValues(idx)
 		//b := rt.buckets[idx]
 	}
@@ -1307,7 +1533,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		cpl = len(rt.buckets) - 1
 	}
 	//Added by Kanemitsu
-	if(rt.isKadRTT){
+	if rt.isKadRTT {
 		count = rt.buckets[cpl].beta
 	}
 
@@ -1315,7 +1541,6 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		peers:  make([]peerDistance, 0, count+rt.bucketsize),
 		target: id,
 	}
-
 
 	// Add peers from the target bucket (cpl+1 shared bits).
 	pds.appendPeersFromList(rt.buckets[cpl].list)
@@ -1353,7 +1578,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		pds.peers = pds.peers[:count]
 	}
 
-	if(rt.isKadRTT && len(pds.peers)>0){
+	if rt.isKadRTT && len(pds.peers) > 0 {
 		//get the 1st entry in pds that has the shortest distance with ID.
 		first := pds.peers[0]
 		fID := first.p
@@ -1394,23 +1619,22 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		OKList := make([]peer.ID, 0, pds.Len())
 		NGList := make([]peer.ID, 0, pds.Len())
 
-		for _,p := range rttpds.peers{
+		for _, p := range rttpds.peers {
 			minDistInt := big.NewInt(0).SetBytes(minDist)
 			pDistInt := big.NewInt(0).SetBytes(p.distance)
-			minDistIntDouble := minDistInt.Mul(minDistInt,big.NewInt(2))
-			if(pDistInt.Cmp(minDistIntDouble) < 0){
+			minDistIntDouble := minDistInt.Mul(minDistInt, big.NewInt(2))
+			if pDistInt.Cmp(minDistIntDouble) < 0 {
 				//If it's OK, p should have higher priority.
 				rtt := p.rtt
-				if(rtt <= fRTT){
+				if rtt <= fRTT {
 					OKList = append(OKList, p.p)
 
-				}else{
-					NGList = append(NGList,p.p)
+				} else {
+					NGList = append(NGList, p.p)
 				}
 
-
-			}else{
-				NGList = append(NGList,p.p)
+			} else {
+				NGList = append(NGList, p.p)
 			}
 
 		}
@@ -1424,14 +1648,12 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 		}
 		return out
 
-
-	}else{
+	} else {
 		rt.tabLock.RUnlock()
 		out := make([]peer.ID, 0, pds.Len())
 		for _, p := range pds.peers {
 			out = append(out, p.p)
 		}
-
 
 		return out
 	}
