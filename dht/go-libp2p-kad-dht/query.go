@@ -288,7 +288,7 @@ func (q *query) run() {
 		b := rt.GetBucket(cpl)
 		alpha = b.GetAlpha()
 		//
-		alpha = int(math.Max(float64(q.dht.alpha), float64(alpha)))
+		//alpha = int(math.Min(float64(q.dht.alpha), float64(alpha)))
 	}
 //Kanemitsu END
 
@@ -402,7 +402,7 @@ func (q *query) isLookupTerminationKadRTT(targetKadID kb.ID) bool {
 		cpl = len(rt.GetBuckets()) - 1
 	}
 	b := rt.GetBucket(cpl)
-	peers := q.queryPeers.GetClosestNInStates(b.GetBeta(), qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
+	peers := q.queryPeers.GetClosestNInStates(int(math.Max(float64(b.GetBeta()),float64(q.dht.beta))), qpeerset.PeerHeard, qpeerset.PeerWaiting, qpeerset.PeerQueried)
 	for _, p := range peers {
 		if q.queryPeers.GetState(p) != qpeerset.PeerQueried {
 			return false

@@ -265,7 +265,7 @@ func NewDHTClient(ctx context.Context, h host.Host, dstore ds.Batching) *IpfsDHT
 }
 
 //Added by Kanemitsu
-func (dht *IpfsDHT) SetKadRTT(v bool){
+func (dht *IpfsDHT) SetKadRTT(v bool) {
 	dht.isKadRTT = v
 }
 
@@ -299,7 +299,7 @@ func makeDHT(ctx context.Context, h host.Host, cfg config) (*IpfsDHT, error) {
 		routingTablePeerFilter: cfg.routingTable.peerFilter,
 		rtPeerDiversityFilter:  cfg.routingTable.diversityFilter,
 		//Added by Kanemitsu
-		isKadRTT: 				cfg.isKadRTT,
+		isKadRTT: cfg.isKadRTT,
 
 		fixLowPeersChan: make(chan struct{}, 1),
 
@@ -315,8 +315,10 @@ func makeDHT(ctx context.Context, h host.Host, cfg config) (*IpfsDHT, error) {
 	// be published soon.
 	if dht.isKadRTT {
 		maxLastSuccessfulOutboundThreshold = cfg.routingTable.refreshInterval
+		//ping-pong登録
+		RegisterPingPong(h)
 
-	}else{
+	} else {
 		if cfg.concurrency < cfg.bucketSize { // (alpha < K)
 			l1 := math.Log(float64(1) / float64(cfg.bucketSize))                              //(Log(1/K))
 			l2 := math.Log(float64(1) - (float64(cfg.concurrency) / float64(cfg.bucketSize))) // Log(1 - (alpha / K))
@@ -326,8 +328,6 @@ func makeDHT(ctx context.Context, h host.Host, cfg config) (*IpfsDHT, error) {
 			maxLastSuccessfulOutboundThreshold = cfg.routingTable.refreshInterval
 		}
 	}
-
-
 
 	// construct routing table
 	// use twice the theoritical usefulness threhold to keep older peers around longer
@@ -342,13 +342,12 @@ func makeDHT(ctx context.Context, h host.Host, cfg config) (*IpfsDHT, error) {
 
 	}else{
 
-	 */
+	*/
 	rt, err := makeRoutingTable(dht, cfg, 2*maxLastSuccessfulOutboundThreshold)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct routing table,err=%s", err)
 	}
 	dht.routingTable = rt
-
 
 	//}
 	dht.bootstrapPeers = cfg.bootstrapPeers
@@ -376,7 +375,6 @@ func makeDHT(ctx context.Context, h host.Host, cfg config) (*IpfsDHT, error) {
 	dht.ProviderManager = pm
 
 	dht.rtFreezeTimeout = rtFreezeTimeout
-
 
 	return dht, nil
 }
@@ -447,8 +445,7 @@ func makeRtRefreshManager(dht *IpfsDHT, cfg config, maxLastSuccessfulOutboundThr
 	return rt, err
 }
 
- */
-
+*/
 
 func makeRoutingTable(dht *IpfsDHT, cfg config, maxLastSuccessfulOutboundThreshold time.Duration) (*kb.RoutingTable, error) {
 	// make a Routing Table Diversity Filter
@@ -706,7 +703,6 @@ func (dht *IpfsDHT) putLocal(key string, rec *recpb.Record) error {
 	return dht.datastore.Put(mkDsKey(key), data)
 }
 
-
 func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 	bootstrapCount := 0
 	isBootsrapping := false
@@ -727,8 +723,10 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 			//Added by Kanemitsu
 			var newlyAdded bool
 			var err error
-			if(dht.isKadRTT){
-				dur := dht.KadRTTPing(dht.ctx, addReq.p)
+			if dht.isKadRTT {
+				//dur := dht.KadRTTPing(dht.ctx, addReq.p)
+				dur := dht.pingProcess(dht.ctx, addReq.p)
+
 				//fmt.Println("***Duration: %d", dur)
 				//dht.Ping(dht.ctx, addReq.p)
 				//dur := dht.routingTable.GetRTT(addReq.p)
@@ -737,12 +735,13 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 
 				newlyAdded, err = dht.routingTable.TryAddPeerKadRTT(addReq.p, addReq.queryPeer, isBootsrapping, dur)
 
-			}else{
-
+			} else {
+				//dur := dht.KadRTTPing(dht.ctx, addReq.p)
+				//newlyAdded, err = dht.routingTable.TryAddPeer2(addReq.p, addReq.queryPeer, isBootsrapping, dur)
 				newlyAdded, err = dht.routingTable.TryAddPeer(addReq.p, addReq.queryPeer, isBootsrapping)
 
-			}
 
+			}
 
 			if err != nil {
 				// peer not added.
@@ -998,28 +997,44 @@ func (dht *IpfsDHT) Ping(ctx context.Context, p peer.ID) error {
 
 	return nil
 }
+func (dht *IpfsDHT) pingProcess(ctx context.Context, p peer.ID) time.Duration{
+	start := time.Now()
+	playPingPong(dht.host, p)
+	dur := time.Since(start)
 
+	return dur
+}
 // Ping sends a ping message to the passed peer and waits for a response.
 func (dht *IpfsDHT) KadRTTPing(ctx context.Context, p peer.ID) time.Duration {
-	//req := pb.NewMessage(pb.Message_PING, nil, 0)
+
+	req := pb.NewMessage(pb.Message_PING, nil, 0)
 	//Added by Kanemitsu
-	//start := time.Now()
+	start := time.Now()
 
 	//resp, err := dht.sendRequest(ctx, p, req)
+	dht.sendRequest(ctx, p, req)
+	/*if err != nil {
+		//return fmt.Errorf("sending request: %w", err)
+	}
+	if resp.Type != pb.Message_PING {
+		//return fmt.Errorf("got unexpected response type: %v", resp.Type)
+	}*/
 	//dht.handlePing(ctx, p, req)
 	//dht.handlePing()
 
 	//dht.routingTable.metrics.LatencyEWMA(p)
 	//Added by Kanemitsu
 	//if(dht.isKadRTT){
-	//dur := time.Since(start)
+	dur := time.Since(start)
+
+
 	//dht.routingTable.SetRTT(p, dur)
+	return dur
 
-//	}
+	//}
 
-	return -1
+	//return -1
 }
-
 
 // newContextWithLocalTags returns a new context.Context with the InstanceID and
 // PeerID keys populated. It will also take any extra tags that need adding to
