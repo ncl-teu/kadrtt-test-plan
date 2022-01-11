@@ -1,0 +1,129 @@
+[metadata]
+name = "all"
+author = "Hidehiro Kanemitsu"
+
+[global]
+plan = "dht"
+case = "find-providers"
+total_instances = 100
+builder = "docker:go"
+runner = "local:docker"
+[daemon.scheduler]
+task_timeout_min = 40
+[runners."local:docker"]
+run_timeout_min=40
+
+[[groups]]
+id = "passive"
+[groups.instances]
+count = 16
+percentage = 0.0
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "1"
+latency = "100"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
+
+[[groups]]
+id = "provider-small"
+[groups.instances]
+count = 16
+percentage = 0.0
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "4"
+latency = "150"
+record_count = "10"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
+
+[[groups]]
+id = "provider-medium"
+[groups.instances]
+count = 17
+percentage = 0.0
+
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "3"
+latency = "200"
+record_count = "10"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
+
+[[groups]]
+id = "provider-large"
+[groups.instances]
+count = 17
+percentage = 0.0
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "2"
+latency = "250"
+record_count = "10"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
+
+[[groups]]
+id = "searcher"
+[groups.instances]
+count = 17
+percentage = 0.0
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "5"
+latency = "300"
+n_find_peers = "10"
+search_records = "true"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
+
+[[groups]]
+id = "bs"
+[groups.instances]
+count = 17
+percentage = 0.0
+
+[groups.run]
+[groups.run.test_params]
+alpha = "10"
+beta = "10"
+bootstrapper = "true"
+bs_strategy = "5"
+bucket_size = "20"
+group_order = "0"
+latency = "350"
+timeout_secs = "1000"
+iskadrtt = "true"
+kadrtt_interval = "180"
