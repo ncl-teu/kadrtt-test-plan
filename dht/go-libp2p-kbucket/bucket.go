@@ -40,7 +40,7 @@ func (p *PeerInfo) GetRTT() time.Duration {
 	return p.rtt
 }
 
-func (p *PeerInfo) SetRTT(t time.Duration){
+func (p *PeerInfo) SetRTT(t time.Duration) {
 	p.rtt = t
 }
 
@@ -54,8 +54,7 @@ func (p *PeerInfo) SetRTT(t time.Duration){
 type bucket struct {
 	list *list.List
 
-//Added by Kanemitsu
-
+	//Added by Kanemitsu
 
 	/**
 	Degree of lookup concurrency
@@ -84,10 +83,8 @@ type bucket struct {
 
 	/**
 	The current variance in terms of ID distance
-	 */
+	*/
 	idVariance *big.Int
-
-
 }
 
 func newBucket() *bucket {
@@ -101,37 +98,32 @@ func newBucket() *bucket {
 	b.k = 1.0
 	b.idVariance = big.NewInt(int64(-1))
 
-
-
 	return b
 }
-
-
 
 //Added by Kanemitsu
 func (b *bucket) SetAlpha(v int) {
 	b.alpha = v
 }
 
-func (b *bucket) GetAlpha() int{
+func (b *bucket) GetAlpha() int {
 	return b.alpha
 }
 
-func (b *bucket) SetBeta(v int){
+func (b *bucket) SetBeta(v int) {
 	b.beta = v
 }
-func (b *bucket) GetBeta() int{
+func (b *bucket) GetBeta() int {
 	return b.beta
 }
 
-func (b *bucket) SetK(v int){
+func (b *bucket) SetK(v int) {
 	b.k = v
 }
 
-func (b *bucket) GetK() int{
+func (b *bucket) GetK() int {
 	return b.k
 }
-
 
 // returns all peers in the bucket
 // it is safe for the caller to modify the returned objects as it is a defensive copy
@@ -167,7 +159,6 @@ func (b *bucket) min(lessThan func(p1 *PeerInfo, p2 *PeerInfo) bool) *PeerInfo {
 }
 
 //added by Kanemitsu
-
 
 // updateAllWith updates all the peers in the bucket by applying the given update function.
 func (b *bucket) updateAllWith(updateFnc func(p *PeerInfo)) {
@@ -221,7 +212,6 @@ func (b *bucket) moveToFront(id peer.ID) {
 
 func (b *bucket) pushFront(p *PeerInfo) {
 	b.list.PushFront(p)
-
 
 }
 

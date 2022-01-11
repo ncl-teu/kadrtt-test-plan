@@ -128,7 +128,7 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 
 	rt.setOptValues(0)
 	//set the initial values for k, alpha, and beta.
-	rt.buildInitParameters()
+	//rt.buildInitParameters()
 	rt.lastExTime = time.Now()
 	rt.num_arrive = 1
 	rt.num_exchange = 1
@@ -567,6 +567,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 	var total = big.NewInt(0)
 	rttList := list.New()
 
+	//まずは端っこの距離を計測する．
 	for i := 0; i < len; i++ {
 		//If the exising entry's RTT > new Entry's RTT,
 		//the existing one is put into the list
@@ -574,7 +575,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 			break
 		}
 		//fmt.Println("#### 561/ ExsitingRTT:", bp[i].rtt.Nanoseconds(), " /NewRTT:", rtt.Nanoseconds())
-		if bp[i].GetRTT() == 0 {
+		if bp[i].GetRTT().Milliseconds() <= 0 {
 			//RTTの更新
 			existingRTT := rt.metrics.LatencyEWMA(bp[i].Id)
 			bp[i].SetRTT(existingRTT)
@@ -586,6 +587,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		dist = dist.Abs(dist)
 		//var dist2 = big.NewFloat(0)
 		//dist2.
 		//dist2 = dist2.Div(dist, big.NewInt(36893488147419103232 ))
@@ -611,6 +613,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 		//start2 := time.Now()
 
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		dist = dist.Abs(dist)
 		//dist = dist.Div(dist, big.NewInt(36893488147419103232 ))
 		//end2 := time.Since(start2)
 		//fmt.Println("###Time2:", end2.Microseconds())
@@ -693,7 +696,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 					})
 					//tmpB.pushFront(info2)
 
-					fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
+					//fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
 					rt.prob_exchange++
 					rt.PeerAdded(p)
 				}
@@ -763,7 +766,7 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 		}
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
-
+		dist = dist.Abs(dist)
 		total.Add(total, dist)
 
 	}
@@ -779,6 +782,7 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 			break
 		}
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		dist = dist.Abs(dist)
 		sub := total.Abs(total.Sub(dist, avg))
 		//m := sub.Mul(sub, sub)
 		m := sub.Add(sub,sub)
@@ -818,6 +822,7 @@ func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 		}
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		dist = dist.Abs(dist)
 		total.Add(total, dist)
 
 	}
@@ -833,6 +838,7 @@ func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 			break
 		}
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		dist = dist.Abs(dist)
 		sub := total.Abs(total.Sub(dist, avg))
 		//m := sub.Mul(sub, sub)
 		m := sub.Add(sub,sub)
@@ -858,7 +864,7 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 	rt.num_arrive++
 	span := time.Since(rt.lastExTime)
 	//fmt.Print("######## 814")
-	fmt.Print("^^^^^^^^^^^^^^^^^alpha:", bucket.GetAlpha(), "/ beta:", bucket.GetBeta(),"/ K:", bucket.GetK())
+	//fmt.Print("^^^^^^^^^^^^^^^^^alpha:", bucket.GetAlpha(), "/ beta:", bucket.GetBeta(),"/ K:", bucket.GetK())
 
 	if span.Seconds() >= rt.rttInterval.Seconds() {
 
@@ -923,8 +929,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		}
 		//Reset the values of exchange probability for the next calculation
 		rt.lastExTime = time.Now()
-		rt.num_arrive = 0
-		rt.num_exchange = 0
+		rt.num_arrive = 1
+		rt.num_exchange = 1
 
 	}
 	//fmt.Print("######## 882")
@@ -1055,7 +1061,7 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			info := bucket.list.Front().Value.(*PeerInfo)
 			//fmt.Print("######## 1006")
 
-			fmt.Println("*****firstRTT: %d, NextRTT, %d", info.GetRTT(), rtt)
+			//fmt.Println("*****firstRTT: %d, NextRTT, %d", info.GetRTT(), rtt)
 
 			if info.GetRTT() > rtt {
 				//fmt.Print("######## 1013")
@@ -1082,11 +1088,11 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			}
 
 		} else {
-			fmt.Println("############ IDVariance #############")
-			start := time.Now()
+			//fmt.Println("############ IDVariance #############")
+			//start := time.Now()
 			rt.calcIDVariance(bucket, p, rtt)
-			dur := time.Since(start)
-			fmt.Println("############Elapsed: ", dur.Milliseconds(), "(ms)")
+			//dur := time.Since(start)
+			//fmt.Println("############Elapsed: ", dur.Milliseconds(), "(ms)")
 		}
 
 	} else {
@@ -1579,6 +1585,7 @@ func (rt *RoutingTable) NearestPeers(id ID, count int) []peer.ID {
 	}
 
 	if rt.isKadRTT && len(pds.peers) > 0 {
+
 		//get the 1st entry in pds that has the shortest distance with ID.
 		first := pds.peers[0]
 		fID := first.p
