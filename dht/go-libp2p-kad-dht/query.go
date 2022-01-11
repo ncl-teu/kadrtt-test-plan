@@ -288,7 +288,7 @@ func (q *query) run() {
 		b := rt.GetBucket(cpl)
 		alpha = b.GetAlpha()
 		//
-		//alpha = int(math.Min(float64(q.dht.alpha), float64(alpha)))
+		alpha = int(math.Max(float64(q.dht.alpha), float64(alpha)))
 	}
 //Kanemitsu END
 
@@ -464,6 +464,11 @@ func (q *query) queryPeer(ctx context.Context, ch chan<- *queryUpdate, p peer.ID
 	}
 
 	queryDuration := time.Since(startQuery)
+/*
+	q.dht.smlk.Lock()
+	q.dht.rttMap[p] = queryDuration
+	q.dht.smlk.Unlock()
+*/
 
 	// query successful, try to add to RT
 	q.dht.peerFound(q.dht.ctx, p, true)
@@ -554,6 +559,8 @@ func (dht *IpfsDHT) dialPeer(ctx context.Context, p peer.ID) error {
 	})
 
 	pi := peer.AddrInfo{ID: p}
+
+	start := time.Now()
 	if err := dht.host.Connect(ctx, pi); err != nil {
 		logger.Debugf("error connecting: %s", err)
 		routing.PublishQueryEvent(ctx, &routing.QueryEvent{
@@ -564,6 +571,12 @@ func (dht *IpfsDHT) dialPeer(ctx context.Context, p peer.ID) error {
 
 		return err
 	}
+	dur := time.Since(start)
+	dht.smlk.Lock()
+	dht.rttMap[p] = dur
+	dht.smlk.Unlock()
+
+
 	logger.Debugf("connected. dial success.")
 	return nil
 }

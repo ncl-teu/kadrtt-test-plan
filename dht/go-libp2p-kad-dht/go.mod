@@ -37,20 +37,12 @@ require (
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1
 	go.opencensus.io v0.23.0
 	go.uber.org/zap v1.18.1
-	//github.com/prometheus/common/log v0.1.0
-	//github.com/ipfs/go-log v1.0.0
-	//github.com/libp2p/go-libp2p v0.4.2
-	//github.com/libp2p/go-libp2p-core v0.2.5
-	//github.com/libp2p/go-libp2p-quic-transport v0.2.2
-	//.com/libp2p/go-tcp-transport v0.1.1
-	//github.com/miekg/dns v1.1.22 // indirect
-	//github.com/multiformats/go-multiaddr v0.1.2
 )
 
-//replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
+replace github.com/libp2p/go-libp2p-kbucket => ../go-libp2p-kbucket
 
 //require github.com/ncl-teu/go-libp2p-kadrtt-kbucket v0.3.0
 //replace github.com/libp2p/go-libp2p-kbucket => github.com/ncl-teu/go-libp2p-kadrtt-kbucket
 //replace github.com/libp2p/go-libp2p-kad-dht => /home/kanemih/testground/libp2p-test-plans/dht/go-libp2p-kad-dht
 
-replace github.com/libp2p/go-libp2p-kbucket => /plan/go-libp2p-kbucket
+//replace github.com/libp2p/go-libp2p-kbucket => /plan/go-libp2p-kbucket

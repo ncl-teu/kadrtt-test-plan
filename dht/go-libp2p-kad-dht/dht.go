@@ -70,6 +70,7 @@ const (
 type addPeerRTReq struct {
 	p         peer.ID
 	queryPeer bool
+	//rtt time.Duration
 }
 
 // IpfsDHT is an implementation of Kademlia with S/Kademlia modifications.
@@ -89,6 +90,8 @@ type IpfsDHT struct {
 
 	//Added by Kanemitsu
 	isKadRTT bool
+
+	rttMap map[peer.ID]time.Duration
 
 	// ProviderManager stores & manages the provider recorroutingTableds for this Dht peer.
 	ProviderManager *providers.ProviderManager
@@ -196,6 +199,8 @@ func New(ctx context.Context, h host.Host, options ...Option) (*IpfsDHT, error) 
 	dht.disableFixLowPeers = cfg.disableFixLowPeers
 
 	dht.Validator = cfg.validator
+
+	dht.rttMap =  make(map[peer.ID]time.Duration)
 
 	dht.testAddressUpdateProcessing = cfg.testAddressUpdateProcessing
 
@@ -703,6 +708,22 @@ func (dht *IpfsDHT) putLocal(key string, rec *recpb.Record) error {
 	return dht.datastore.Put(mkDsKey(key), data)
 }
 
+func (dht *IpfsDHT) processAdd(addReq addPeerRTReq, isBootsrapping bool){
+
+	dur := dht.pingProcess(dht.ctx, addReq.p)
+	var newlyAdded bool
+	var err error
+	newlyAdded, err = dht.routingTable.TryAddPeerKadRTT(addReq.p, addReq.queryPeer, isBootsrapping, dur)
+	if err != nil {
+		// peer not added.
+		//continue
+	}
+	if !newlyAdded && addReq.queryPeer {
+		// the peer is already in our RT, but we just successfully queried it and so let's give it a
+		// bump on the query time so we don't ping it too soon for a liveliness check.
+		dht.routingTable.UpdateLastSuccessfulOutboundQueryAt(addReq.p, time.Now())
+	}
+}
 func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 	bootstrapCount := 0
 	isBootsrapping := false
@@ -724,34 +745,40 @@ func (dht *IpfsDHT) rtPeerLoop(proc goprocess.Process) {
 			var newlyAdded bool
 			var err error
 			if dht.isKadRTT {
-				//dur := dht.KadRTTPing(dht.ctx, addReq.p)
-				dur := dht.pingProcess(dht.ctx, addReq.p)
-
-				//fmt.Println("***Duration: %d", dur)
-				//dht.Ping(dht.ctx, addReq.p)
-				//dur := dht.routingTable.GetRTT(addReq.p)
-
-				//dur := time.Duration(10000)
+				go dht.processAdd(addReq, isBootsrapping)
+				/*
+				rand.Seed(time.Now().Unix())
+				dur := time.Duration(rand.Intn(30)) * time.Millisecond
 
 				newlyAdded, err = dht.routingTable.TryAddPeerKadRTT(addReq.p, addReq.queryPeer, isBootsrapping, dur)
-
+				if err != nil {
+					// peer not added.
+					continue
+				}
+				if !newlyAdded && addReq.queryPeer {
+					// the peer is already in our RT, but we just successfully queried it and so let's give it a
+					// bump on the query time so we don't ping it too soon for a liveliness check.
+					dht.routingTable.UpdateLastSuccessfulOutboundQueryAt(addReq.p, time.Now())
+				}*/
 			} else {
+				//dur := dht.pingProcess(dht.ctx, addReq.p)
+
 				//dur := dht.KadRTTPing(dht.ctx, addReq.p)
 				//newlyAdded, err = dht.routingTable.TryAddPeer2(addReq.p, addReq.queryPeer, isBootsrapping, dur)
 				newlyAdded, err = dht.routingTable.TryAddPeer(addReq.p, addReq.queryPeer, isBootsrapping)
-
+				if err != nil {
+					// peer not added.
+					continue
+				}
+				if !newlyAdded && addReq.queryPeer {
+					// the peer is already in our RT, but we just successfully queried it and so let's give it a
+					// bump on the query time so we don't ping it too soon for a liveliness check.
+					dht.routingTable.UpdateLastSuccessfulOutboundQueryAt(addReq.p, time.Now())
+				}
 
 			}
 
-			if err != nil {
-				// peer not added.
-				continue
-			}
-			if !newlyAdded && addReq.queryPeer {
-				// the peer is already in our RT, but we just successfully queried it and so let's give it a
-				// bump on the query time so we don't ping it too soon for a liveliness check.
-				dht.routingTable.UpdateLastSuccessfulOutboundQueryAt(addReq.p, time.Now())
-			}
+
 		case <-dht.refreshFinishedCh:
 			bootstrapCount = bootstrapCount + 1
 			if bootstrapCount == 2 {
