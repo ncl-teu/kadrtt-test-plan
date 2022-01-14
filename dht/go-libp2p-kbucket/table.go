@@ -124,9 +124,9 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 	//Addec by Kanemitsu START
 	rt.arv_rate_store = 0.5
 	rt.pool_size = rt.bucketsize
-	rt.prob_exchange = 0.5
+	rt.prob_exchange = 0.6
 
-	rt.setOptValues(0)
+	//rt.setOptValues(0)
 	//set the initial values for k, alpha, and beta.
 	//rt.buildInitParameters()
 	rt.lastExTime = time.Now()
@@ -188,7 +188,7 @@ func (rt *RoutingTable) setOptValues(idx int) *bucket {
 	//k_opt = int(math.Max(float64(k_opt), float64(rt.bucketsize)))
 
 	initB.SetK(k_opt)
-
+	//fmt.Println("####idx:", idx, "/K:", k_opt)
 	b_opt := rt.CalcBetaOpt(idx)
 	if b_opt < 1 {
 		b_opt = k_opt
@@ -201,6 +201,7 @@ func (rt *RoutingTable) setOptValues(idx int) *bucket {
 	if a_opt > int(rt.pool_size) {
 		a_opt = int(rt.pool_size)
 	}
+
 	a_opt = int(math.Max(2, float64(a_opt)))
 	//a_opt = int(math.Max(rt.alpha), )
 
@@ -233,17 +234,22 @@ func (rt *RoutingTable) setPoolSize(val int) {
 
 //Derive optimal k
 func (rt *RoutingTable) CalcKOpt(idx int) int {
-	r := idx + 1
-	val := (float64)(rt.prob_exchange * rt.arv_rate_store)
+	//r := idx + 1
+	r := 255 - idx
+	prob := math.Max(rt.prob_exchange * rt.arv_rate_store, 0.1)
+
+	val := (float64)(prob)
 	w2 := math.Log(val)
-	w1 := -1 * math.Pow(2, float64(r)) * math.Pow(math.E, (float64)(-1*rt.prob_exchange*rt.arv_rate_store))
+	w1 := -1 * math.Pow(2, float64(r)) * math.Pow(math.E, (float64)(-1*prob))
 	nomi := rt.LambertW(0, w1*w2)
-	denomi := math.Log((float64)(rt.prob_exchange * rt.arv_rate_store))
+	denomi := math.Log(prob)
 	k_opt := int(math.Max(float64(1), math.Floor(-1*nomi/denomi)))
+	//fmt.Println("#####idx:", idx, "/kopt:", k_opt)
 	if k_opt < 2 {
 		k_opt = 2
 	}
-	if(k_opt < rt.bucketsize){
+
+	if k_opt < rt.bucketsize {
 		k_opt = rt.bucketsize
 	}
 
@@ -443,7 +449,6 @@ func (rt *RoutingTable) CalcAlphaOpt(idx int) int {
 		alpha_opt = 2
 	}
 
-
 	return int(math.Ceil(alpha_opt))
 }
 
@@ -467,11 +472,12 @@ func (rt *RoutingTable) buildInitParameters() {
 
 	for i := 0; i < 160; i++ {
 		rt.nextBucket()
-		idx := len(rt.buckets) - 1
-		//	rt.setOptValues(idx)
-		b := rt.buckets[idx]
+		//idx := len(rt.buckets) - 1
+	//	idx := i
+		//rt.setOptValues(idx)
+		//b := rt.buckets[idx]
 
-		fmt.Printf("idx:%d / k: %d, alpha:%d, beta: %d , pool: %d\n", i, b.k, b.alpha, b.beta, rt.pool_size)
+		//fmt.Printf("idx:%d / k: %d, alpha:%d, beta: %d , pool: %d\n", i, b.k, b.alpha, b.beta, rt.pool_size)
 		//fmt.Print("k_opt:", k)
 	}
 }
@@ -534,7 +540,7 @@ func (rt *RoutingTable) TryAddPeer2(p peer.ID, queryPeer bool, isReplaceable boo
 	rt.tabLock.Lock()
 	defer rt.tabLock.Unlock()
 
-	return rt.addPeer2(p, queryPeer, isReplaceable,rtt)
+	return rt.addPeer2(p, queryPeer, isReplaceable, rtt)
 }
 
 func (rt *RoutingTable) TryAddPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
@@ -580,6 +586,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 			existingRTT := rt.metrics.LatencyEWMA(bp[i].Id)
 			bp[i].SetRTT(existingRTT)
 		}
+
 		if bp[i].GetRTT().Milliseconds() > rtt.Milliseconds() {
 			rttList.PushFront(bp[i])
 			//fmt.Println("###564: RTT Reverse###")
@@ -588,6 +595,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 		//Calc ID Distance for two entries
 		dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
 		dist = dist.Abs(dist)
+
 		//var dist2 = big.NewFloat(0)
 		//dist2.
 		//dist2 = dist2.Div(dist, big.NewInt(36893488147419103232 ))
@@ -600,8 +608,7 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 	var vTotal = big.NewInt(0)
 	//var variance *big.Int
 
-
-//	start1 := time.Now()
+	//	start1 := time.Now()
 	avg := total.Div(total, big.NewInt(int64(len)))
 	//end1 := time.Since(start1)
 	//fmt.Println("###Time1:", end1.Microseconds())
@@ -628,8 +635,8 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 		//m := sub.Mul(sub, sub)
 		m := sub.Add(sub, sub)
 		//end4 := time.Since(start4)
-	//	fmt.Println("###Time4:", end4.Microseconds())
-	//	start5 := time.Now()
+		//	fmt.Println("###Time4:", end4.Microseconds())
+		//	start5 := time.Now()
 
 		vTotal.Add(vTotal, m)
 		//end5 := time.Since(start5)
@@ -657,34 +664,34 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 			isExchanged = true
 		}
 	}
-/*
-	//If the actual ID is set to retP,
-	//the bucket should be updated.
-	replaceablePeer := b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
-		return p1.replaceable
-	})
+	/*
+		//If the actual ID is set to retP,
+		//the bucket should be updated.
+		replaceablePeer := b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+			return p1.replaceable
+		})
 
-	if replaceablePeer != nil && replaceablePeer.replaceable {
-		// let's evict it and add the new peer
-		if rt.removePeer(replaceablePeer.Id) {
-			b.pushFront(&PeerInfo{
-				Id:                            p,
-				LastUsefulAt:                  time.Now(),
-				LastSuccessfulOutboundQueryAt: time.Now(),
-				AddedAt:                       time.Now(),
-				dhtId:                         ConvertPeerID(p),
-				replaceable:                   true,
-			})
-			rt.PeerAdded(p)
-			//return true, nil
+		if replaceablePeer != nil && replaceablePeer.replaceable {
+			// let's evict it and add the new peer
+			if rt.removePeer(replaceablePeer.Id) {
+				b.pushFront(&PeerInfo{
+					Id:                            p,
+					LastUsefulAt:                  time.Now(),
+					LastSuccessfulOutboundQueryAt: time.Now(),
+					AddedAt:                       time.Now(),
+					dhtId:                         ConvertPeerID(p),
+					replaceable:                   true,
+				})
+				rt.PeerAdded(p)
+				//return true, nil
+			}
 		}
-	}
 
- */
+	*/
 	if isExchanged {
 		if peer := b.getPeer(retP); peer != nil {
-			if(peer.replaceable){
-				if(rt.removePeer(retP)){
+			if peer.replaceable {
+				if rt.removePeer(retP) {
 					b.pushFront(&PeerInfo{
 						Id:                            p,
 						LastUsefulAt:                  time.Now(),
@@ -697,7 +704,8 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 					//tmpB.pushFront(info2)
 
 					//fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
-					rt.prob_exchange++
+					//rt.prob_exchange++
+					rt.num_exchange++
 					rt.PeerAdded(p)
 				}
 			}
@@ -707,6 +715,182 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 
 	}
 
+	//b.idVariance = vTotal
+
+	return vTotal
+
+}
+
+//Added by Kanemitsu
+func (rt *RoutingTable) calcIDVariance3(b *bucket, p peer.ID, rtt time.Duration) *big.Int {
+	//Sort by increasing order of key
+	var bp ByPeer = b.peers()
+	//peers := ks.ByPeer(bp)
+	len := len(b.peers())
+
+	//tmpb := b
+	sort.Sort(bp)
+	//var total *big.Int
+	var total = big.NewInt(0)
+	rttList := list.New()
+	lowList := list.New()
+	highList := list.New()
+
+	cnt := 0
+	//kyori := Distance(ConvertPeerID(bp[0].Id), ConvertPeerID(bp[len-1].Id))
+	//fmt.Println("BIT0:", (ConvertPeerID(bp[0].Id), "BITMax:", (ConvertPeerID(bp[len-1].Id))
+	//fmt.Println("BitLen:", kyori.BitLen())
+
+	//まずは端っこの距離を計測する．
+	for i := 0; i < len; i++ {
+		//If the exising entry's RTT > new Entry's RTT,
+		//the existing one is put into the list
+
+		if i == len-1 {
+			break
+		}
+		//fmt.Println("#### 561/ ExsitingRTT:", bp[i].rtt.Nanoseconds(), " /NewRTT:", rtt.Nanoseconds())
+		if bp[i].GetRTT().Milliseconds() <= 0 {
+			//RTTの更新
+			existingRTT := rt.metrics.LatencyEWMA(bp[i].Id)
+			bp[i].SetRTT(existingRTT)
+		}
+
+		if bp[i].GetRTT().Milliseconds() > rtt.Milliseconds() {
+			rttList.PushFront(bp[i])
+			//fmt.Println("###564: RTT Reverse###")
+		}
+		dist := big.NewInt(0)
+		if ConvertPeerID(bp[i].Id).less(rt.local) {
+			lowList.PushFront(bp[i])
+			if lowList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				total.Add(total, dist)
+				cnt++
+			}
+
+		} else {
+			highList.PushFront(bp[i])
+			if highList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				total.Add(total, dist)
+				cnt++
+			}
+		}
+
+	}
+	//fmt.Println("low:", lowList.Len(), "/High:", highList.Len())
+
+	var vTotal = big.NewInt(0)
+	//var variance *big.Int
+
+	//	start1 := time.Now()
+	avg := total.Div(total, big.NewInt(int64(cnt)))
+	lowList.Init()
+	highList.Init()
+	cnt = 0
+	for i := 0; i < len-1; i++ {
+		dist := big.NewInt(0)
+		if ConvertPeerID(bp[i].Id).less(rt.local) {
+			lowList.PushFront(bp[i])
+			if lowList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				sub := total.Abs(total.Sub(dist, avg))
+				m := sub.Add(sub, sub)
+				vTotal.Add(vTotal, m)
+				cnt++
+			}
+
+		} else {
+			highList.PushFront(bp[i])
+			if highList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				sub := total.Abs(total.Sub(dist, avg))
+				m := sub.Add(sub, sub)
+				vTotal.Add(vTotal, m)
+
+				cnt++
+			}
+		}
+
+	}
+
+	retP := p
+	retP.Size()
+
+	//_ = rttList.Front().Value.(*PeerInfo).Id
+	//tmpB := newBucket()
+	//copy(tmpB.peers(), b.peers())
+
+	var isExchanged bool
+	isExchanged = false
+	for e := rttList.Front(); e != nil; e = e.Next() {
+		oldP := e.Value.(PeerInfo).Id
+		//Calc ID Variance for each peer RTT > new Peer RTT
+		//swap oldP and p for deriting the new variance.
+		newV := rt.getIDVariance3(b, oldP, p, rtt)
+
+		if newV.Cmp(vTotal) <= 0 {
+			vTotal = newV
+			retP = oldP
+			isExchanged = true
+		}
+	}
+	/*
+		//If the actual ID is set to retP,
+		//the bucket should be updated.
+		replaceablePeer := b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+			return p1.replaceable
+		})
+
+		if replaceablePeer != nil && replaceablePeer.replaceable {
+			// let's evict it and add the new peer
+			if rt.removePeer(replaceablePeer.Id) {
+				b.pushFront(&PeerInfo{
+					Id:                            p,
+					LastUsefulAt:                  time.Now(),
+					LastSuccessfulOutboundQueryAt: time.Now(),
+					AddedAt:                       time.Now(),
+					dhtId:                         ConvertPeerID(p),
+					replaceable:                   true,
+				})
+				rt.PeerAdded(p)
+				//return true, nil
+			}
+		}
+
+	*/
+	if isExchanged {
+		if peer := b.getPeer(retP); peer != nil {
+			if peer.replaceable {
+				if rt.removePeer(retP) {
+					b.pushFront(&PeerInfo{
+						Id:                            p,
+						LastUsefulAt:                  time.Now(),
+						LastSuccessfulOutboundQueryAt: time.Now(),
+						AddedAt:                       time.Now(),
+						dhtId:                         ConvertPeerID(p),
+						replaceable:                   true,
+						rtt:                           rtt,
+					})
+					//tmpB.pushFront(info2)
+
+					//fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
+					//rt.prob_exchange++
+					rt.num_exchange++
+
+					rt.PeerAdded(p)
+				}
+			}
+		}
+
+	} else {
+
+	}
 
 	//b.idVariance = vTotal
 
@@ -714,11 +898,192 @@ func (rt *RoutingTable) calcIDVariance(b *bucket, p peer.ID, rtt time.Duration) 
 
 }
 
-func (rt *RoutingTable)remove(slice []PeerInfo, s int) []PeerInfo {
+//rt.localよりも小さい/大きいでグループを分ける．
+//各グループ内でのdistanceの分散を求める．
+//そして，2つの分散の平均値で比較する．
+//Added by Kanemitsu
+func (rt *RoutingTable) calcIDVarianceByCPL(b *bucket, p peer.ID, rtt time.Duration) float64 {
+	//Sort by increasing order of key
+	var bp ByPeer = b.peers()
+	//peers := ks.ByPeer(bp)
+	len := len(b.peers())
+
+	//tmpb := b
+	sort.Sort(bp)
+	//var total *big.Int
+	var total = uint(0)
+	rttList := list.New()
+	//rttListLarge := list.New()
+	//lowList = list.New()
+	//highList = list.New()
+
+	//まずは端っこの距離を計測する．
+	for i := 0; i < len; i++ {
+		//If the exising entry's RTT > new Entry's RTT,
+		//the existing one is put into the list
+
+		if i == len-1 {
+			break
+		}
+		//fmt.Println("#### 561/ ExsitingRTT:", bp[i].rtt.Nanoseconds(), " /NewRTT:", rtt.Nanoseconds())
+		if bp[i].GetRTT().Milliseconds() <= 0 {
+			//RTTの更新
+			existingRTT := rt.metrics.LatencyEWMA(bp[i].Id)
+			bp[i].SetRTT(existingRTT)
+		}
+
+		if bp[i].GetRTT().Milliseconds() > rtt.Milliseconds() {
+			rttList.PushFront(bp[i])
+			//fmt.Println("###564: RTT Reverse###")
+		}
+
+		//Calc ID Distance for two entries
+
+		//dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		//dist = dist.Abs(dist)
+		dist := CommonPrefixLen(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+
+		//var dist2 = big.NewFloat(0)
+		//dist2.
+		//dist2 = dist2.Div(dist, big.NewInt(36893488147419103232 ))
+		//fmt.Println("dist:", dist)
+		total += uint(dist)
+
+	}
+	//fmt.Println("### 574: rttLlistLen:", rttList.Len())
+
+	//var vTotal = big.NewInt(0)
+	var vTotal = float64(0)
+
+	//var variance *big.Int
+
+	//	start1 := time.Now()
+	avg := float64(float64(total) / float64(len))
+
+	//avg := total.Div(total, big.NewInt(int64(len)))
+	//end1 := time.Since(start1)
+	//fmt.Println("###Time1:", end1.Microseconds())
+	//Derive the current ID variance
+	var m = float64(0)
+
+	for i := 0; i < len-1; i++ {
+		//Calc ID Distance for two entries
+		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
+		//total.Add(total, dist)
+		//start2 := time.Now()
+
+		//dist := Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		//dist = dist.Abs(dist)
+		dist := CommonPrefixLen(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+
+		//dist = dist.Div(dist, big.NewInt(36893488147419103232 ))
+		//end2 := time.Since(start2)
+		//fmt.Println("###Time2:", end2.Microseconds())
+
+		//start3 := time.Now()
+
+		//sub := total.Abs(total.Sub(dist, avg))
+		sub := math.Abs(float64(dist) - float64(avg))
+
+		//end3 := time.Since(start3)
+		//fmt.Println("###Time3:", end3.Microseconds())
+		////start4 := time.Now()
+		m += sub * sub
+		//m := sub.Mul(sub, sub)
+		//m := sub.Add(sub, sub)
+		//end4 := time.Since(start4)
+		//	fmt.Println("###Time4:", end4.Microseconds())
+		//	start5 := time.Now()
+		vTotal += m
+		//vTotal.Add(vTotal, m)
+		//end5 := time.Since(start5)
+		//fmt.Println("###Time5:", end5.Microseconds())
+	}
+
+	retP := p
+	retP.Size()
+
+	//_ = rttList.Front().Value.(*PeerInfo).Id
+	//tmpB := newBucket()
+	//copy(tmpB.peers(), b.peers())
+
+	var isExchanged bool
+	isExchanged = false
+	for e := rttList.Front(); e != nil; e = e.Next() {
+		oldP := e.Value.(PeerInfo).Id
+		//Calc ID Variance for each peer RTT > new Peer RTT
+		//swap oldP and p for deriting the new variance.
+		newV := rt.getIDVarianceByCPL(b, oldP, p, rtt)
+
+		//	if newV.Cmp(vTotal) <= 0 {
+		if newV <= vTotal {
+			vTotal = newV
+			retP = oldP
+			isExchanged = true
+		}
+	}
+	/*
+		//If the actual ID is set to retP,
+		//the bucket should be updated.
+		replaceablePeer := b.min(func(p1 *PeerInfo, p2 *PeerInfo) bool {
+			return p1.replaceable
+		})
+
+		if replaceablePeer != nil && replaceablePeer.replaceable {
+			// let's evict it and add the new peer
+			if rt.removePeer(replaceablePeer.Id) {
+				b.pushFront(&PeerInfo{
+					Id:                            p,
+					LastUsefulAt:                  time.Now(),
+					LastSuccessfulOutboundQueryAt: time.Now(),
+					AddedAt:                       time.Now(),
+					dhtId:                         ConvertPeerID(p),
+					replaceable:                   true,
+				})
+				rt.PeerAdded(p)
+				//return true, nil
+			}
+		}
+
+	*/
+	if isExchanged {
+		if peer := b.getPeer(retP); peer != nil {
+			if peer.replaceable {
+				if rt.removePeer(retP) {
+					b.pushFront(&PeerInfo{
+						Id:                            p,
+						LastUsefulAt:                  time.Now(),
+						LastSuccessfulOutboundQueryAt: time.Now(),
+						AddedAt:                       time.Now(),
+						dhtId:                         ConvertPeerID(p),
+						replaceable:                   true,
+						rtt:                           rtt,
+					})
+					//tmpB.pushFront(info2)
+
+					//fmt.Println("### 633: ENTRY EXCHANGED!!!!!")
+					rt.num_arrive++
+					rt.num_exchange++
+					rt.PeerAdded(p)
+				}
+			}
+		}
+
+	} else {
+
+	}
+
+	//b.idVariance = vTotal
+
+	return vTotal
+
+}
+
+func (rt *RoutingTable) remove(slice []PeerInfo, s int) []PeerInfo {
 	return append(slice[:s], slice[s+1:]...)
 }
 
-func (rt *RoutingTable)removePeerInfo(slice []PeerInfo, search peer.ID) []PeerInfo {
+func (rt *RoutingTable) removePeerInfo(slice []PeerInfo, search peer.ID) []PeerInfo {
 	result := []PeerInfo{}
 	for _, v := range slice {
 		if v.Id != search {
@@ -726,6 +1091,76 @@ func (rt *RoutingTable)removePeerInfo(slice []PeerInfo, search peer.ID) []PeerIn
 		}
 	}
 	return result
+}
+
+func (rt *RoutingTable) getIDVarianceByCPL(b *bucket, oldP peer.ID, newP peer.ID, rtt time.Duration) float64 {
+	//var total = big.NewInt(0)
+	var total = uint(0)
+
+	//tmpB := b
+	//tmpB := newBucket()
+	//tmpB := b
+	tmpB := make([]PeerInfo, b.len())
+
+	copy(tmpB, b.peers())
+	tmpB = rt.removePeerInfo(tmpB, oldP)
+
+	tmpB = append(tmpB, PeerInfo{
+		Id:                            newP,
+		LastUsefulAt:                  time.Now(),
+		LastSuccessfulOutboundQueryAt: time.Now(),
+		AddedAt:                       time.Now(),
+		dhtId:                         ConvertPeerID(newP),
+		replaceable:                   true,
+		rtt:                           rtt,
+	})
+
+	len := len(tmpB)
+
+	var bp ByPeer = tmpB
+	//peers := ks.ByPeer(bp)
+
+	sort.Sort(bp)
+	//var total *big.Int
+
+	for i := 0; i < len; i++ {
+		//If the exising entry's RTT > new Entry's RTT,
+		//the existing one is put into the list
+		if i == len-1 {
+			break
+		}
+		//Calc ID Distance for two entries
+		dist := CommonPrefixLen(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		total += uint(dist)
+
+	}
+
+	var vTotal = float64(0)
+
+	//var vTotal = big.NewInt(0)
+	//var variance *big.Int
+	avg := float64(float64(total) / float64(len))
+
+	//avg := total.Div(total, big.NewInt(int64(len)))
+	for i := 0; i < len; i++ {
+		//Calc ID Distance for two entries
+		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
+		//total.Add(total, dist)
+		if i == len-1 {
+			break
+		}
+		dist := CommonPrefixLen(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+		//dist = dist.Abs(dist)
+		sub := math.Abs(float64(dist) - float64(avg))
+		m := sub * sub
+		//sub := total.Abs(total.Sub(dist, avg))
+		//m := sub.Mul(sub, sub)
+		//m := sub.Add(sub, sub)
+		vTotal += float64(m)
+		//vTotal.Add(vTotal, m)
+	}
+
+	return vTotal
 }
 
 //Added by Kanemitsu
@@ -749,7 +1184,6 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 		rtt:                           rtt,
 	})
 
-
 	len := len(tmpB)
 
 	var bp ByPeer = tmpB
@@ -785,8 +1219,114 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 		dist = dist.Abs(dist)
 		sub := total.Abs(total.Sub(dist, avg))
 		//m := sub.Mul(sub, sub)
-		m := sub.Add(sub,sub)
+		m := sub.Add(sub, sub)
 		vTotal.Add(vTotal, m)
+	}
+
+	return vTotal
+}
+
+//Added by Kanemitsu
+func (rt *RoutingTable) getIDVariance3(b *bucket, oldP peer.ID, newP peer.ID, rtt time.Duration) *big.Int {
+	var total = big.NewInt(0)
+	//tmpB := b
+	//tmpB := newBucket()
+	//tmpB := b
+	tmpB := make([]PeerInfo, b.len())
+
+	copy(tmpB, b.peers())
+	tmpB = rt.removePeerInfo(tmpB, oldP)
+
+	tmpB = append(tmpB, PeerInfo{
+		Id:                            newP,
+		LastUsefulAt:                  time.Now(),
+		LastSuccessfulOutboundQueryAt: time.Now(),
+		AddedAt:                       time.Now(),
+		dhtId:                         ConvertPeerID(newP),
+		replaceable:                   true,
+		rtt:                           rtt,
+	})
+
+	len := len(tmpB)
+	lowList := list.New()
+	highList := list.New()
+
+	var bp ByPeer = tmpB
+	//peers := ks.ByPeer(bp)
+
+	sort.Sort(bp)
+	//var total *big.Int
+	cnt := 0
+	for i := 0; i < len; i++ {
+		//If the exising entry's RTT > new Entry's RTT,
+		//the existing one is put into the list
+		if i == len-1 {
+			break
+		}
+		dist := big.NewInt(0)
+		if ConvertPeerID(bp[i].Id).less(rt.local) {
+			lowList.PushFront(bp[i])
+			if lowList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+
+				total.Add(total, dist)
+				cnt++
+			}
+
+		} else {
+			highList.PushFront(bp[i])
+			if highList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+
+				total.Add(total, dist)
+
+				cnt++
+			}
+		}
+
+	}
+
+	var vTotal = big.NewInt(0)
+	//var variance *big.Int
+	lowList.Init()
+	highList.Init()
+	avg := total.Div(total, big.NewInt(int64(len)))
+	cnt = 0
+	for i := 0; i < len; i++ {
+		//Calc ID Distance for two entries
+		//dist := Distance(ConvertPeerID(bp[i].Id),ConvertPeerID(bp[i+1].Id))
+		//total.Add(total, dist)
+		if i == len-1 {
+			break
+		}
+
+		dist := big.NewInt(0)
+		if ConvertPeerID(bp[i].Id).less(rt.local) {
+			lowList.PushFront(bp[i])
+			if lowList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				sub := total.Abs(total.Sub(dist, avg))
+				m := sub.Add(sub, sub)
+				vTotal.Add(vTotal, m)
+				cnt++
+			}
+
+		} else {
+			highList.PushFront(bp[i])
+			if highList.Len() > 1 {
+				dist = Distance(ConvertPeerID(bp[i].Id), ConvertPeerID(bp[i+1].Id))
+				dist = dist.Abs(dist)
+				sub := total.Abs(total.Sub(dist, avg))
+				m := sub.Add(sub, sub)
+				vTotal.Add(vTotal, m)
+
+				cnt++
+			}
+		}
+
 	}
 
 	return vTotal
@@ -796,15 +1336,14 @@ func (rt *RoutingTable) getIDVariance(b *bucket, oldP peer.ID, newP peer.ID, rtt
 func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 	var total = big.NewInt(0)
 	//tmpB := b
-/*	tmpB := newBucket()
-	copy(tmpB.peers(), b)
-	tmpB.remove(id)
-*/
+	/*	tmpB := newBucket()
+		copy(tmpB.peers(), b)
+		tmpB.remove(id)
+	*/
 	tmpB := make([]PeerInfo, len(b))
 
 	copy(tmpB, b)
 	tmpB = rt.removePeerInfo(tmpB, id)
-
 
 	len := len(tmpB)
 
@@ -841,7 +1380,7 @@ func (rt *RoutingTable) getIDVarianceWithOut(b ByPeer, id peer.ID) *big.Int {
 		dist = dist.Abs(dist)
 		sub := total.Abs(total.Sub(dist, avg))
 		//m := sub.Mul(sub, sub)
-		m := sub.Add(sub,sub)
+		m := sub.Add(sub, sub)
 		vTotal.Add(vTotal, m)
 	}
 
@@ -872,7 +1411,7 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		//old_beta := bucket.beta
 		//old_k := bucket.k
 		//fmt.Print("######## 820")
-
+		rt.lastExTime = time.Now()
 		rt.arv_rate_store = float64(float64(rt.num_arrive) / float64(span))
 		rt.prob_exchange = float64(float64(rt.num_exchange) / float64(rt.num_arrive))
 		//fmt.Print("######## 824")
@@ -906,17 +1445,31 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			for i := 0; i < peer_num; i++ {
 				//Derive ID variance when bp[i] is evicted.
 				variance := rt.getIDVarianceWithOut(bp, bp[i].Id)
+
 				retList.PushFront(&VarianceInfo{
 					id:       bp[i].Id,
 					variance: variance,
 				})
+
 			}
+			ps := make([]VarianceInfo, 0, retList.Len())
+			for e := retList.Front(); e != nil; e = e.Next() {
+				p := e.Value.(*VarianceInfo)
+				ps = append(ps, *p)
+			}
+			var bv ByVariance = ps
+			sort.Sort(bv)
+			//len2 := bv.Len()
+
+			//sort.Sort(retList)
+
 			//fmt.Println("#### Before:%d", len(bucket.peers()))
 			//Remove $num peers from the k-bucket.
+
 			for i := 0; i < num; i++ {
-				targetID := retList.Front()
-				bucket.remove(targetID.Value.(VarianceInfo).id)
-				retList.Remove(targetID)
+				targetID := bv[i]
+				bucket.remove(targetID.id)
+				//retList.Remove(targetID)
 			}
 			//fmt.Println("#### After:%d", len(bucket.peers()))
 			//fmt.Print("######## 866")
@@ -928,9 +1481,9 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 
 		}
 		//Reset the values of exchange probability for the next calculation
-		rt.lastExTime = time.Now()
+
 		rt.num_arrive = 1
-		rt.num_exchange = 1
+		rt.num_exchange = 0
 
 	}
 	//fmt.Print("######## 882")
@@ -1055,7 +1608,7 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 			//fmt.Print("######## 1001")
 
 			rt.num_exchange++
-		}else if bucket.len() == 1 {
+		} else if bucket.len() == 1 {
 			//fmt.Print("######## 1005")
 
 			info := bucket.list.Front().Value.(*PeerInfo)
@@ -1067,8 +1620,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 				//fmt.Print("######## 1013")
 
 				//swap
-				if(info.replaceable) {
-					if (rt.removePeer(info.Id)) {
+				if info.replaceable {
+					if rt.removePeer(info.Id) {
 						bucket.pushFront(&PeerInfo{
 							Id:                            p,
 							LastUsefulAt:                  lastUsefulAt,
@@ -1090,7 +1643,8 @@ func (rt *RoutingTable) addPeerKadRTT(p peer.ID, queryPeer bool, isReplaceable b
 		} else {
 			//fmt.Println("############ IDVariance #############")
 			//start := time.Now()
-			rt.calcIDVariance(bucket, p, rtt)
+			rt.calcIDVarianceByCPL(bucket, p, rtt)
+			//fmt.Print("#####BID:", bucketID, "/")
 			//dur := time.Since(start)
 			//fmt.Println("############Elapsed: ", dur.Milliseconds(), "(ms)")
 		}
@@ -1195,7 +1749,7 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 		bucket = rt.buckets[bucketID]
 		blen := rt.bucketsize
 		if rt.isKadRTT {
-			//blen = bucket.k
+			blen = bucket.k
 		}
 		// push the peer only if the bucket isn't overflowing after slitting
 		if bucket.len() < blen /*rt.bucketsize*/ {
@@ -1250,7 +1804,6 @@ func (rt *RoutingTable) addPeer(p peer.ID, queryPeer bool, isReplaceable bool) (
 	return false, ErrPeerRejectedNoCapacity
 }
 
-
 // locking is the responsibility of the caller
 func (rt *RoutingTable) addPeer2(p peer.ID, queryPeer bool, isReplaceable bool, rtt time.Duration) (bool, error) {
 	bucketID := rt.bucketIdForPeer(p)
@@ -1303,7 +1856,7 @@ func (rt *RoutingTable) addPeer2(p peer.ID, queryPeer bool, isReplaceable bool, 
 			AddedAt:                       now,
 			dhtId:                         ConvertPeerID(p),
 			replaceable:                   isReplaceable,
-			rtt: 						rtt,
+			rtt:                           rtt,
 		})
 		rt.PeerAdded(p)
 
@@ -1330,7 +1883,7 @@ func (rt *RoutingTable) addPeer2(p peer.ID, queryPeer bool, isReplaceable bool, 
 				AddedAt:                       now,
 				dhtId:                         ConvertPeerID(p),
 				replaceable:                   isReplaceable,
-				rtt:							rtt,
+				rtt:                           rtt,
 			})
 			rt.PeerAdded(p)
 			return true, nil
@@ -1361,7 +1914,7 @@ func (rt *RoutingTable) addPeer2(p peer.ID, queryPeer bool, isReplaceable bool, 
 				AddedAt:                       now,
 				dhtId:                         ConvertPeerID(p),
 				replaceable:                   isReplaceable,
-				rtt:							rtt,
+				rtt:                           rtt,
 			})
 			rt.PeerAdded(p)
 			return true, nil
@@ -1482,6 +2035,9 @@ func (rt *RoutingTable) nextBucket() {
 	// This is the last bucket, which allegedly is a mixed bag containing peers not belonging in dedicated (unfolded) buckets.
 	// _allegedly_ is used here to denote that *all* peers in the last bucket might feasibly belong to another bucket.
 	// This could happen if e.g. we've unfolded 4 buckets, and all peers in folded bucket 5 really belong in bucket 8.
+	if(len(rt.buckets)-1 == 0){
+		rt.setOptValues(0)
+	}
 	bucket := rt.buckets[len(rt.buckets)-1]
 	newBucket := bucket.split(len(rt.buckets)-1, rt.local)
 
