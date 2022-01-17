@@ -70,6 +70,7 @@ type RoutingTable struct {
 	*/
 	arv_rate_store float64
 
+
 	/**
 	# of STORE(addPeer) requests
 	*/
@@ -117,14 +118,15 @@ func NewRoutingTable(bucketsize int, localID ID, latency time.Duration, m peerst
 		PeerAdded:   func(peer.ID) {},
 
 		usefulnessGracePeriod: usefulnessGracePeriod,
-
+		arv_rate_store: 0.5,
+		prob_exchange: 0.5,
 		df: df,
 	}
 	rt.isKadRTT = true
 	//Addec by Kanemitsu START
-	rt.arv_rate_store = 0.5
+	//rt.arv_rate_store = 0.5
 	rt.pool_size = rt.bucketsize
-	rt.prob_exchange = 0.6
+	//rt.prob_exchange = 0.5
 
 	//rt.setOptValues(0)
 	//set the initial values for k, alpha, and beta.
