@@ -1,7 +1,7 @@
 # kadrtt-test-plan
 ## KadRTT architecture
 - Detailed description can be seen [here](https://hackmd.io/b-gKq_JmQLOSu1-v7IBRlw)
-## How to install
+## Installation of KadRTT
 - Install according to [here](https://docs.testground.ai/getting-started). Then go to ./testground and type `make install`, `go build`, and `sudo cp testground /usr/local/bin`.
 - At $TESTGROUND_HOME/pkg/build/docker_go.go, add the following lines: 
 ~~~
