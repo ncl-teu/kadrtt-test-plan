@@ -41,6 +41,12 @@ iskadrtt = "true"
 kadrtt_interval = "180"
 ~~~
 ## Trouble shooting
+- If the testrun stops, type the following: 
+~~~
+docker system prune -a
+docker pull iptestground/sidecar:edge
+docker pull iptestground/sync-service:latest
+~~~
 - If goproxy is not working, type `docker run -d -p80:8081 goproxy/goproxy` or `docker system prune -a` and then `testground daemon`. 
 - Or, see [here](https://docs.testground.ai/v/master/runner-library/local-docker/troubleshooting#troubleshooting)
 - If peer containers are running due to unexceptional finish in tesground, kill them by `docker stop $(docker ps -q)`
