@@ -20,10 +20,10 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - `# vi /etc/sysctl.conf` 
 - ~~~
 - Then refresh testground and pull some images as follws: 
+~~~
 docker system prune -a
 docker pull iptestground/sidecar:edge
 docker pull iptestground/sync-service:latest
-~~~
 ~~~
 vm.overcommit_memory = 1
 net.ipv4.neigh.default.gc_thresh1 = 4096
