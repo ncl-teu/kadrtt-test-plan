@@ -17,13 +17,13 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Copy the testground executable by `cp testground /usr/local/bin` for Ubuntu. 
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
 - Increase ARP cache size for up to 100 container instances(100 peers) by varying kernel parameter as root:
-- `# vi /etc/sysctl.conf` 
-- ~~~
-- Then refresh testground and pull some images as follws: 
+- Then refresh testground and pull some images as follows: 
 ~~~
 docker system prune -a
 docker pull iptestground/sidecar:edge
 docker pull iptestground/sync-service:latest
+~~~
+- `# vi /etc/sysctl.conf` to change the kernel parameters as follows: 
 ~~~
 vm.overcommit_memory = 1
 net.ipv4.neigh.default.gc_thresh1 = 4096
