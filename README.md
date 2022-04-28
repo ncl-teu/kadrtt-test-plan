@@ -16,14 +16,7 @@ COPY /plan/go.mod ${PLAN_DIR}/go.mod
 - Then type `make install` at $TESTGROUND_HOME, and `go build` .
 - Copy the testground executable by `cp testground /usr/local/bin` for Ubuntu. 
 - At $TESTGROUND_HOME/kadrtt-test-plan/, import the test-plan by `testground plan import --from dht/ --name dht`
-- Increase ARP cache size for up to 100 container instances(100 peers) by varying kernel parameter as root:
-- Then refresh testground and pull some images as follows: 
-~~~
-docker system prune -a
-docker pull iptestground/sidecar:edge
-docker pull iptestground/sync-service:latest
-~~~
-- `# vi /etc/sysctl.conf` to change the kernel parameters as follows: 
+- Increase ARP cache size for up to 100 container instances(100 peers) by varying kernel parameter as root by `# vi /etc/sysctl.conf` to change the kernel parameters as follows: 
 ~~~
 vm.overcommit_memory = 1
 net.ipv4.neigh.default.gc_thresh1 = 4096
@@ -31,6 +24,12 @@ net.ipv4.neigh.default.gc_thresh2 = 8192
 net.ipv4.neigh.default.gc_thresh3 = 16384
 ~~~
 - Then see the current parameter by `syctl -p`. 
+- Then refresh testground and pull some images as follows: 
+~~~
+docker system prune -a
+docker pull iptestground/sidecar:edge
+docker pull iptestground/sync-service:latest
+~~~
 - Then run the test-plan by `testground daemon` and in another terminal, type `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
 ## Enable KadRTT
 - At `dht/go-libpp-kbucket/table.go`, set as: 
