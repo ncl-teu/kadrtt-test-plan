@@ -30,7 +30,7 @@ docker system prune -a
 docker pull iptestground/sidecar:edge
 docker pull iptestground/sync-service:latest
 ~~~
-- Then run the test-plan by `testground daemon` and in another terminal, type `testground run composition -f compositions/kadrtt.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht . 
+- Then run the test-plan by `testground daemon` and in another terminal, type `testground run composition -f compositions/kadrttff100.toml` at $TESTGROUND_HOME/kadrtt-test-plan/dht for running 100 peers on single machine.
 ## Enable KadRTT
 - At `dht/go-libpp-kbucket/table.go`, set as: 
 ~~~
