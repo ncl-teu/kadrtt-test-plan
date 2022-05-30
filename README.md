@@ -1,4 +1,5 @@
 # kadrtt-test-plan
+- Author: Hidehiro Kanemitsu. 
 ## KadRTT architecture
 - Detailed description can be seen [here](https://hackmd.io/b-gKq_JmQLOSu1-v7IBRlw)
 ## Installation of KadRTT
